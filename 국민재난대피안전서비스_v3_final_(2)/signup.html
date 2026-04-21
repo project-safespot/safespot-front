@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>회원가입 - 국민재난대피포털</title>
+<link rel="stylesheet" href="_common.css">
+<style>
+.signup-wrap{max-width:700px;margin:40px auto 60px;padding:0 20px;}
+.step-bar{display:flex;align-items:center;margin-bottom:36px;}
+.step-item{flex:1;text-align:center;position:relative;}
+.step-item:not(:last-child)::after{content:'';position:absolute;top:18px;left:50%;width:100%;height:2px;background:#dde3ed;z-index:0;}
+.step-circle{width:36px;height:36px;border-radius:50%;background:#dde3ed;color:#999;font-size:15px;font-weight:700;display:flex;align-items:center;justify-content:center;margin:0 auto 6px;position:relative;z-index:1;}
+.step-item.done .step-circle{background:var(--navy);color:#fff;}
+.step-item.active .step-circle{background:var(--red);color:#fff;}
+.step-label{font-size:13px;color:#999;font-weight:600;}
+.step-item.done .step-label,.step-item.active .step-label{color:var(--navy);}
+
+.signup-box{background:#fff;border:1px solid var(--border);border-top:4px solid var(--navy);padding:32px 36px;}
+.signup-box h2{font-size:20px;font-weight:700;color:var(--navy);margin-bottom:6px;}
+.signup-box p.sub{font-size:14px;color:#888;margin-bottom:24px;}
+
+/* 약관 */
+.agree-all{background:#eef2fb;border:1px solid var(--border);padding:14px 18px;display:flex;align-items:center;gap:10px;margin-bottom:10px;cursor:pointer;}
+.agree-all label{font-size:16px;font-weight:700;color:var(--navy);cursor:pointer;}
+.agree-list{border:1px solid var(--border);}
+.agree-item{padding:13px 18px;border-bottom:1px solid #f0f4fa;display:flex;align-items:flex-start;gap:10px;}
+.agree-item:last-child{border-bottom:none;}
+.agree-item label{flex:1;font-size:14px;color:#333;cursor:pointer;line-height:1.5;}
+.agree-item .req-tag{background:var(--red);color:#fff;font-size:11px;font-weight:700;padding:1px 6px;margin-right:4px;}
+.agree-item .opt-tag{background:#888;color:#fff;font-size:11px;font-weight:700;padding:1px 6px;margin-right:4px;}
+.agree-item .view-link{color:var(--navy);font-size:13px;text-decoration:underline;cursor:pointer;white-space:nowrap;margin-left:auto;flex-shrink:0;}
+input[type=checkbox]{width:18px;height:18px;accent-color:var(--navy);flex-shrink:0;margin-top:1px;}
+
+/* 폼 */
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 16px;}
+.form-grid .form-row.full{grid-column:1/-1;}
+.pw-strength{height:5px;background:#eee;border-radius:3px;margin-top:6px;overflow:hidden;}
+.pw-bar{height:100%;border-radius:3px;transition:width .3s,background .3s;}
+.pw-text{font-size:12px;margin-top:4px;}
+.tel-row{display:flex;gap:8px;align-items:flex-end;}
+.tel-row input{flex:1;}
+.tel-btn{background:var(--navy);color:#fff;border:none;padding:10px 14px;font-size:14px;cursor:pointer;font-family:inherit;white-space:nowrap;font-weight:600;}
+.cert-row{display:flex;gap:8px;}
+.cert-row input{flex:1;}
+.cert-timer{font-size:13px;color:var(--red);font-weight:600;padding:10px 0;}
+.form-divider{border:none;border-top:1px solid var(--border);margin:22px 0;}
+
+/* 완료 */
+.done-box{text-align:center;padding:20px 0;}
+.done-icon{width:72px;height:72px;border-radius:50%;background:#e6f9ee;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;}
+.done-icon svg{width:38px;height:38px;}
+.done-box h3{font-size:22px;font-weight:700;color:var(--navy);margin-bottom:8px;}
+.done-box p{font-size:15px;color:#555;line-height:1.7;}
+.done-box .user-info{background:#f4f7fc;border:1px solid var(--border);padding:16px 24px;margin:20px 0;text-align:left;font-size:15px;}
+.done-box .user-info strong{color:var(--navy);}
+
+.step-btns{display:flex;justify-content:space-between;margin-top:28px;gap:12px;}
+.step-btns button{flex:1;}
+</style>
+</head>
+<body>
+
+<!-- 정부 최상단 바 -->
+<div class="govbar">
+  <div class="govbar-inner">
+    <div class="govbar-left"><span class="taeguk"></span>이 누리집은 대한민국 공식 전자정부 누리집입니다.</div>
+    <div class="govbar-right"><a href="#">ENGLISH</a><span>|</span><a href="#">어린이</a><span>|</span><a href="#">사이트맵</a><span>|</span><a href="#">안내도우미</a></div>
+  </div>
+</div>
+
+<!-- 헤더 -->
+<header>
+  <div class="header-inner">
+    <a class="h-logo" href="index.html">
+      <div class="h-logo-mark"><svg viewBox="0 0 34 34" fill="none"><circle cx="17" cy="17" r="16" fill="#1d3461" stroke="#4a6fa5" stroke-width="1"/><path d="M17 5 A12 12 0 0 1 29 17 A12 12 0 0 0 17 5Z" fill="#c8102e" opacity=".85"/><path d="M17 29 A12 12 0 0 1 5 17 A12 12 0 0 0 17 29Z" fill="#c8102e" opacity=".85"/><circle cx="17" cy="17" r="4" fill="#fff"/></svg></div>
+      <div class="h-logo-texts"><strong>국민재난대피포털</strong><span>국민 재난 대피 안전 서비스</span></div>
+    </a>
+    <div class="h-search-center">
+      <input type="text" id="hdrSrch" placeholder="재난정보, 대피소, 행동요령 검색" onkeydown="if(event.key==='Enter')hdrSearch()">
+      <button onclick="hdrSearch()">검색</button>
+    </div>
+    <div class="h-userinfo" id="hdrUtil"></div>
+  </div>
+</header>
+
+<!-- 주메뉴 -->
+<nav class="main-nav">
+  <div class="main-nav-inner">
+    <a class="nav-item" href="dashboard.html">재난현황</a>
+    <a class="nav-item" href="shelter.html">대피소 찾기</a>
+    <a class="nav-item" href="alerts.html">재난문자</a>
+    <a class="nav-item" href="family.html">가족 찾기</a>
+    <a class="nav-item" href="checklist.html">재난 대비</a>
+    <a class="nav-item" href="guide.html">국민행동요령</a>
+  </div>
+</nav>
+
+<!-- 긴급재난문자 띠 -->
+<div class="emg-strip" id="emgStrip">
+  <div class="wrap">
+    <span class="emg-tag">긴급재난문자</span>
+    <span><strong>[호우경보]</strong> 서울 강남·서초·송파구 호우경보 발효 — 지하 공간 이용 자제, 저지대 주민 즉시 대피 요망 (2026-04-09 09:32)</span>
+    <button class="emg-x" onclick="this.parentElement.parentElement.style.display='none'">✕</button>
+  </div>
+</div>
+
+<!-- 페이지 타이틀 -->
+<div class="ptbar">
+  <div class="ptbar-inner">
+    <a href="index.html">홈</a> &gt; <span class="curr">회원가입</span>
+  </div>
+</div>
+
+<!-- 본문 -->
+<div class="signup-wrap">
+  <!-- 단계 표시 -->
+  <div class="step-bar">
+    <div class="step-item active" id="step1-ind">
+      <div class="step-circle">1</div>
+      <div class="step-label">약관 동의</div>
+    </div>
+    <div class="step-item" id="step2-ind">
+      <div class="step-circle">2</div>
+      <div class="step-label">정보 입력</div>
+    </div>
+    <div class="step-item" id="step3-ind">
+      <div class="step-circle">3</div>
+      <div class="step-label">가입 완료</div>
+    </div>
+  </div>
+
+  <!-- Step 1: 약관 동의 -->
+  <div id="step1" class="signup-box">
+    <h2>약관 동의</h2>
+    <p class="sub">서비스 이용을 위해 아래 약관에 동의해 주세요.</p>
+
+    <div class="agree-all" onclick="toggleAll()">
+      <input type="checkbox" id="chkAll">
+      <label for="chkAll">전체 동의 (필수 및 선택 항목 포함)</label>
+    </div>
+
+    <div class="agree-list">
+      <div class="agree-item">
+        <input type="checkbox" id="chk1" class="req-chk">
+        <label for="chk1"><span class="req-tag">필수</span>국민재난대피포털 이용약관</label>
+        <span class="view-link" onclick="showTerms('이용약관')">내용 보기</span>
+      </div>
+      <div class="agree-item">
+        <input type="checkbox" id="chk2" class="req-chk">
+        <label for="chk2"><span class="req-tag">필수</span>개인정보 수집 및 이용 동의</label>
+        <span class="view-link" onclick="showTerms('개인정보 수집·이용')">내용 보기</span>
+      </div>
+      <div class="agree-item">
+        <input type="checkbox" id="chk3" class="req-chk">
+        <label for="chk3"><span class="req-tag">필수</span>위치정보 수집 및 이용 동의<br><small style="color:#888;font-size:12px;">대피소 찾기, 가족 위치 공유 기능에 활용됩니다.</small></label>
+        <span class="view-link" onclick="showTerms('위치정보 이용')">내용 보기</span>
+      </div>
+      <div class="agree-item">
+        <input type="checkbox" id="chk4">
+        <label for="chk4"><span class="opt-tag">선택</span>개인정보 제3자 제공 동의<br><small style="color:#888;font-size:12px;">유관 기관(소방청, 경찰청 등)과의 정보 공유에 활용됩니다.</small></label>
+        <span class="view-link" onclick="showTerms('제3자 제공')">내용 보기</span>
+      </div>
+      <div class="agree-item">
+        <input type="checkbox" id="chk5">
+        <label for="chk5"><span class="opt-tag">선택</span>재난 관련 안내 정보 수신 동의 (SMS/이메일)<br><small style="color:#888;font-size:12px;">재난 예보, 대피 정보, 생활 안전 뉴스레터를 받아보실 수 있습니다.</small></label>
+      </div>
+    </div>
+
+    <div class="step-btns">
+      <button class="btn-secondary" onclick="window.location.href='index.html'">취소</button>
+      <button class="btn-primary" onclick="goStep2()">다음 단계</button>
+    </div>
+  </div>
+
+  <!-- Step 2: 정보 입력 -->
+  <div id="step2" class="signup-box" style="display:none;">
+    <h2>회원 정보 입력</h2>
+    <p class="sub">가입에 필요한 기본 정보를 입력해 주세요. <span style="color:var(--red)">*</span> 는 필수항목입니다.</p>
+
+    <div class="form-grid">
+      <div class="form-row full">
+        <label>아이디 <span class="req">*</span></label>
+        <div style="display:flex;gap:8px;">
+          <input type="text" id="regId" placeholder="영문자, 숫자 조합 6~20자" style="flex:1;">
+          <button class="btn-secondary" style="white-space:nowrap;padding:10px 16px;font-size:14px;" onclick="checkIdDup()">중복확인</button>
+        </div>
+        <div class="hint" id="idHint"></div>
+      </div>
+      <div class="form-row">
+        <label>비밀번호 <span class="req">*</span></label>
+        <input type="password" id="regPw" placeholder="8자 이상, 영문+숫자+특수문자" oninput="checkPw()">
+        <div class="pw-strength"><div class="pw-bar" id="pwBar"></div></div>
+        <div class="pw-text" id="pwText"></div>
+      </div>
+      <div class="form-row">
+        <label>비밀번호 확인 <span class="req">*</span></label>
+        <input type="password" id="regPw2" placeholder="비밀번호를 다시 입력하세요" oninput="checkPw2()">
+        <div class="hint" id="pw2Hint"></div>
+      </div>
+      <div class="form-row">
+        <label>이름 <span class="req">*</span></label>
+        <input type="text" id="regName" placeholder="실명을 입력하세요">
+      </div>
+      <div class="form-row">
+        <label>생년월일 <span class="req">*</span></label>
+        <input type="text" id="regBirth" placeholder="YYYYMMDD (예: 19901231)">
+      </div>
+      <div class="form-row full">
+        <label>휴대전화 <span class="req">*</span></label>
+        <div class="tel-row">
+          <input type="text" id="regTel" placeholder="'-' 없이 숫자만 입력" maxlength="11">
+          <button class="tel-btn" onclick="sendCert()">인증번호 발송</button>
+        </div>
+      </div>
+      <div class="form-row full" id="certRow" style="display:none;">
+        <label>인증번호 <span class="req">*</span></label>
+        <div class="cert-row">
+          <input type="text" id="regCert" placeholder="인증번호 6자리 입력" maxlength="6">
+          <span class="cert-timer" id="certTimer">3:00</span>
+          <button class="tel-btn" onclick="verifyCert()">확인</button>
+        </div>
+      </div>
+      <div class="form-row full">
+        <label>이메일</label>
+        <input type="email" id="regEmail" placeholder="example@email.com">
+      </div>
+      <div class="form-row full">
+        <label>주소</label>
+        <div style="display:flex;gap:8px;margin-bottom:6px;">
+          <input type="text" id="regZip" placeholder="우편번호" style="width:140px;flex:none;" readonly>
+          <button class="btn-secondary" style="padding:10px 14px;font-size:14px;" onclick="findAddr()">주소 검색</button>
+        </div>
+        <input type="text" id="regAddr1" placeholder="기본주소" style="margin-bottom:6px;" readonly>
+        <input type="text" id="regAddr2" placeholder="상세주소를 입력하세요">
+      </div>
+    </div>
+
+    <hr class="form-divider">
+    <div class="form-row">
+      <label>비상연락처 (가족)</label>
+      <input type="text" id="regEmgTel" placeholder="비상시 연락할 가족 전화번호">
+      <div class="hint">재난 발생 시 보호자 연락에 활용됩니다.</div>
+    </div>
+    <div class="form-row">
+      <label>특별 보호 필요 여부</label>
+      <select id="regSpecial">
+        <option value="N">해당 없음</option>
+        <option value="Y">해당 (노인/장애인/임산부/영아 동반 등)</option>
+      </select>
+      <div class="hint">대피소 우선 배정 및 전담 보호 서비스를 제공합니다.</div>
+    </div>
+
+    <div class="step-btns">
+      <button class="btn-secondary" onclick="goBack1()">이전</button>
+      <button class="btn-primary" onclick="goStep3()">가입 완료</button>
+    </div>
+  </div>
+
+  <!-- Step 3: 완료 -->
+  <div id="step3" class="signup-box" style="display:none;">
+    <div class="done-box">
+      <div class="done-icon">
+        <svg viewBox="0 0 38 38" fill="none">
+          <circle cx="19" cy="19" r="18" fill="#1a7f3c"/>
+          <path d="M11 19 L17 25 L27 13" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <h3>회원가입이 완료되었습니다!</h3>
+      <p>국민재난대피포털에 오신 것을 환영합니다.<br>이제 모든 서비스를 이용하실 수 있습니다.</p>
+      <div class="user-info" id="doneInfo"></div>
+      <p style="font-size:14px;color:#888;margin-top:8px;">
+        재난 발생 시 대피소 자동 배정, 가족 위치 공유,<br>재난문자 수신 등의 서비스가 제공됩니다.
+      </p>
+      <div class="step-btns" style="margin-top:28px;">
+        <button class="btn-secondary" onclick="window.location.href='index.html'">로그인 하기</button>
+        <button class="btn-primary" onclick="window.location.href='dashboard.html'">대시보드로 이동</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 로그인 모달 -->
+<div class="login-modal-bg" id="loginModalBg" onclick="if(event.target===this)closeLoginModal()">
+  <div class="login-modal">
+    <div class="lc-top">
+      <h2>로그인</h2>
+      <button class="login-modal-close" onclick="closeLoginModal()">✕</button>
+    </div>
+    <div class="lc-switch-wrap">
+      <div class="lc-methods" id="modalMethods">
+        <div class="lc-method" onclick="alert('공동인증서(구 공인인증서) 및 금융인증서로 로그인합니다.\n(데모: 아이디 로그인을 이용해주세요)')">
+          <div class="lc-icon-box icon-cert"></div>
+          <span class="lc-method-name">공동·금융인증</span>
+        </div>
+        <div class="lc-method" onclick="alert('카카오·네이버·PASS 간편인증으로 로그인합니다.\n(데모: 아이디 로그인을 이용해주세요)')">
+          <div class="lc-icon-box icon-simple"></div>
+          <span class="lc-method-name">간편인증</span>
+        </div>
+        <div class="lc-method" onclick="showIdLoginModal()">
+          <div class="lc-icon-box icon-id"></div>
+          <span class="lc-method-name">아이디 로그인</span>
+        </div>
+      </div>
+      <div class="lc-id-form" id="modalIdForm">
+        <button class="btn-back-login" onclick="backToMethodsModal()">← 다른 방법으로 로그인</button>
+        <div class="lf-err" id="modalErr">아이디 또는 비밀번호가 올바르지 않습니다.</div>
+        <div class="lf-row"><input type="text" id="modalId" placeholder="아이디" onkeydown="if(event.key==='Enter')doModalLogin()"></div>
+        <div class="lf-row"><input type="password" id="modalPw" placeholder="비밀번호" onkeydown="if(event.key==='Enter')doModalLogin()"></div>
+        <button class="btn-lc-do" onclick="doModalLogin()">로그인</button>
+        <div class="lc-id-links"><a href="#">아이디 찾기</a><a href="#">비밀번호 찾기</a></div>
+      </div>
+    </div>
+    <button class="btn-other-login" onclick="alert('공동인증서·카카오·네이버 간편인증 등 다양한 로그인을 지원합니다.')">다른 로그인 안내</button>
+  </div>
+</div>
+
+<!-- 약관 모달 -->
+<div class="modal-bg" id="termModal">
+  <div class="modal" style="width:600px;">
+    <div class="modal-head">
+      <h3 id="termTitle">약관</h3>
+      <button class="modal-close" onclick="closeTerms()">×</button>
+    </div>
+    <div class="modal-body" id="termContent" style="font-size:14px;line-height:1.8;color:#444;"></div>
+    <div class="modal-foot"><button class="btn-primary" onclick="closeTerms()">닫기</button></div>
+  </div>
+</div>
+
+<footer>
+  <div class="wrap">
+    <span>© 2026 행정안전부 국민재난대피포털. All rights reserved.</span>
+    <div class="ft-links">
+      <a href="#">개인정보처리방침</a>
+      <a href="#">이용약관</a>
+      <a href="#">접근성 안내</a>
+      <a href="#">사이트맵</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+let certInterval=null, certSec=180, idChecked=false, certVerified=false;
+
+function toggleAll(){
+  const all=document.getElementById('chkAll');
+  const boxes=document.querySelectorAll('.agree-item input[type=checkbox]');
+  const newVal=!all.checked;
+  all.checked=newVal;
+  boxes.forEach(b=>b.checked=newVal);
+}
+
+function syncAll(){
+  const boxes=document.querySelectorAll('.agree-item input[type=checkbox]');
+  document.getElementById('chkAll').checked=[...boxes].every(b=>b.checked);
+}
+document.querySelectorAll('.agree-item input').forEach(b=>b.addEventListener('change',syncAll));
+
+function goStep2(){
+  const r1=document.getElementById('chk1').checked;
+  const r2=document.getElementById('chk2').checked;
+  const r3=document.getElementById('chk3').checked;
+  if(!r1||!r2||!r3){alert('필수 약관에 모두 동의하셔야 합니다.');return;}
+  document.getElementById('step1').style.display='none';
+  document.getElementById('step2').style.display='block';
+  setStepInd(2);
+}
+
+function goBack1(){
+  document.getElementById('step2').style.display='none';
+  document.getElementById('step1').style.display='block';
+  setStepInd(1);
+}
+
+function goStep3(){
+  const id=document.getElementById('regId').value.trim();
+  const pw=document.getElementById('regPw').value;
+  const pw2=document.getElementById('regPw2').value;
+  const name=document.getElementById('regName').value.trim();
+  const birth=document.getElementById('regBirth').value.trim();
+  const tel=document.getElementById('regTel').value.trim();
+  if(!id){alert('아이디를 입력하세요.');return;}
+  if(!idChecked){alert('아이디 중복확인을 해주세요.');return;}
+  if(!pw||pw.length<8){alert('비밀번호를 8자 이상 입력하세요.');return;}
+  if(pw!==pw2){alert('비밀번호가 일치하지 않습니다.');return;}
+  if(!name){alert('이름을 입력하세요.');return;}
+  if(!birth||birth.length!==8){alert('생년월일을 8자리로 입력하세요.');return;}
+  if(!tel||tel.length<10){alert('휴대전화번호를 입력하세요.');return;}
+  document.getElementById('step2').style.display='none';
+  document.getElementById('step3').style.display='block';
+  setStepInd(3);
+  document.getElementById('doneInfo').innerHTML=
+    `<div style="margin-bottom:6px;"><strong>아이디:</strong> ${id}</div>
+     <div style="margin-bottom:6px;"><strong>이름:</strong> ${name}</div>
+     <div style="margin-bottom:6px;"><strong>생년월일:</strong> ${birth.slice(0,4)}-${birth.slice(4,6)}-${birth.slice(6,8)}</div>
+     <div><strong>휴대전화:</strong> ${tel.replace(/(\d{3})(\d{4})(\d{4})/,'$1-$2-$3')}</div>`;
+  sessionStorage.setItem('user',id);
+  sessionStorage.setItem('userName',name);
+}
+
+function setStepInd(n){
+  for(let i=1;i<=3;i++){
+    const el=document.getElementById('step'+i+'-ind');
+    el.classList.remove('active','done');
+    if(i<n) el.classList.add('done');
+    else if(i===n) el.classList.add('active');
+  }
+}
+
+function checkIdDup(){
+  const id=document.getElementById('regId').value.trim();
+  if(!id||id.length<6){alert('아이디를 6자 이상 입력하세요.');return;}
+  setTimeout(()=>{
+    idChecked=true;
+    document.getElementById('idHint').textContent='✓ 사용 가능한 아이디입니다.';
+    document.getElementById('idHint').style.color='#1a7f3c';
+  },500);
+}
+
+function checkPw(){
+  const pw=document.getElementById('regPw').value;
+  let score=0;
+  if(pw.length>=8) score++;
+  if(/[A-Za-z]/.test(pw)) score++;
+  if(/[0-9]/.test(pw)) score++;
+  if(/[^A-Za-z0-9]/.test(pw)) score++;
+  const bar=document.getElementById('pwBar');
+  const txt=document.getElementById('pwText');
+  const labels=['','매우 약함','약함','보통','강함'];
+  const colors=['','#c8102e','#e8a000','#2a9d8f','#1a7f3c'];
+  bar.style.width=(score*25)+'%';
+  bar.style.background=colors[score]||'#eee';
+  txt.textContent=pw?'비밀번호 강도: '+labels[score]:'';
+  txt.style.color=colors[score]||'#888';
+}
+
+function checkPw2(){
+  const pw=document.getElementById('regPw').value;
+  const pw2=document.getElementById('regPw2').value;
+  const h=document.getElementById('pw2Hint');
+  if(!pw2) return;
+  if(pw===pw2){h.textContent='✓ 비밀번호가 일치합니다.';h.style.color='#1a7f3c';}
+  else{h.textContent='✗ 비밀번호가 일치하지 않습니다.';h.style.color='#c8102e';}
+}
+
+function sendCert(){
+  const tel=document.getElementById('regTel').value.trim();
+  if(tel.length<10){alert('휴대전화번호를 정확히 입력하세요.');return;}
+  document.getElementById('certRow').style.display='block';
+  certSec=180;
+  clearInterval(certInterval);
+  certInterval=setInterval(()=>{
+    certSec--;
+    const m=Math.floor(certSec/60);
+    const s=certSec%60;
+    document.getElementById('certTimer').textContent=m+':'+(s<10?'0':'')+s;
+    if(certSec<=0){clearInterval(certInterval);document.getElementById('certTimer').textContent='만료';}
+  },1000);
+  alert('인증번호가 발송되었습니다.\n(데모: 123456)');
+}
+
+function verifyCert(){
+  const code=document.getElementById('regCert').value;
+  if(code==='123456'||code.length===6){
+    certVerified=true;
+    clearInterval(certInterval);
+    document.getElementById('certTimer').textContent='인증완료';
+    document.getElementById('certTimer').style.color='#1a7f3c';
+    alert('인증이 완료되었습니다.');
+  } else {
+    alert('인증번호가 올바르지 않습니다.');
+  }
+}
+
+const ADDR_DB=[
+  {z:'04524',r:'서울 중구 세종대로 110',j:'중구 태평로1가 31'},
+  {z:'03171',r:'서울 종로구 세종대로 175',j:'종로구 세종로 1'},
+  {z:'06292',r:'서울 강남구 테헤란로 152',j:'강남구 역삼동 648-7'},
+  {z:'06175',r:'서울 강남구 강남대로 396',j:'강남구 역삼동 679-5'},
+  {z:'06298',r:'서울 강남구 언주로 508',j:'강남구 역삼동 736'},
+  {z:'06043',r:'서울 강남구 도산대로 327',j:'강남구 신사동 606'},
+  {z:'06594',r:'서울 서초구 반포대로 222',j:'서초구 반포동 732'},
+  {z:'05505',r:'서울 송파구 올림픽로 300',j:'송파구 신천동 29'},
+  {z:'05551',r:'서울 송파구 오금로 10',j:'송파구 가락동 100'},
+  {z:'03737',r:'서울 서대문구 연세로 50',j:'서대문구 신촌동 134'},
+  {z:'04763',r:'서울 성동구 왕십리로 222',j:'성동구 행당동 17'},
+  {z:'05856',r:'서울 광진구 능동로 216',j:'광진구 능동 18'},
+  {z:'07205',r:'서울 영등포구 여의대로 38',j:'영등포구 여의도동 40'},
+  {z:'07071',r:'서울 동작구 상도로 369',j:'동작구 상도동 395'},
+  {z:'03924',r:'서울 마포구 월드컵북로 396',j:'마포구 상암동 1609'},
+  {z:'04015',r:'서울 마포구 백범로 235',j:'마포구 공덕동 105-75'},
+  {z:'04376',r:'서울 용산구 이태원로 294',j:'용산구 보광동 1-16'},
+  {z:'01800',r:'서울 노원구 동일로 1405',j:'노원구 상계동 697'},
+  {z:'01405',r:'서울 도봉구 노해로 437',j:'도봉구 방학동 719'},
+  {z:'08281',r:'서울 구로구 디지털로26길 72',j:'구로구 구로동 487-11'},
+  {z:'02702',r:'서울 성북구 보문로34길 2',j:'성북구 보문동3가 22'},
+  {z:'16678',r:'경기 수원시 팔달구 효원로 241',j:'수원시 팔달구 인계동 1012'},
+  {z:'14449',r:'경기 부천시 길주로 210',j:'부천시 중동 1141'},
+  {z:'08826',r:'경기 과천시 관문로 47',j:'과천시 중앙동 1'},
+  {z:'13590',r:'경기 성남시 분당구 대왕판교로 660',j:'성남시 분당구 삼평동 688'},
+  {z:'21565',r:'인천 남동구 소래역로 63',j:'인천 남동구 논현동 680'},
+  {z:'47513',r:'부산 연제구 중앙대로 1001',j:'부산 연제구 연산동 1000'},
+  {z:'35208',r:'대전 서구 청사로 189',j:'대전 서구 둔산동 1000'},
+  {z:'41957',r:'대구 수성구 동대구로 37',j:'대구 수성구 범어동 175'},
+  {z:'61452',r:'광주 북구 무등로 254',j:'광주 북구 용봉동 52'},
+];
+function findAddr(){
+  document.getElementById('addrModal').style.display='flex';
+  document.getElementById('addrSrchInput').value='';
+  document.getElementById('addrSrchResults').innerHTML='<div style="padding:30px;text-align:center;color:#aaa;font-size:14px;">검색어를 입력 후 엔터 또는 검색 버튼을 눌러주세요.</div>';
+  setTimeout(()=>document.getElementById('addrSrchInput').focus(),80);
+}
+function doAddrSearch(){
+  const q=document.getElementById('addrSrchInput').value.trim();
+  if(q.length<2){alert('두 글자 이상 입력하세요.');return;}
+  const res=ADDR_DB.filter(a=>a.r.includes(q)||a.j.includes(q)||a.z.includes(q));
+  const el=document.getElementById('addrSrchResults');
+  if(!res.length){el.innerHTML='<div style="padding:30px;text-align:center;color:#888;font-size:14px;">검색 결과가 없습니다.</div>';return;}
+  const hl=s=>s.replace(new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi'),m=>`<mark style="background:#fff3cd;padding:0">${m}</mark>`);
+  el.innerHTML=res.map(a=>`<div onclick="selectRegAddr('${a.z}','${a.r}')" style="padding:13px 18px;border-bottom:1px solid #f0f4fa;cursor:pointer;" onmouseover="this.style.background='#f5f8ff'" onmouseout="this.style.background=''"><span style="color:#c00;font-size:12px;font-weight:700;margin-right:8px;">${a.z}</span><span style="font-size:14px;font-weight:600;">${hl(a.r)}</span><div style="font-size:12px;color:#888;margin-top:3px;">지번 ${hl(a.j)}</div></div>`).join('');
+}
+function selectRegAddr(zip,road){
+  document.getElementById('regZip').value=zip;
+  document.getElementById('regAddr1').value=road;
+  document.getElementById('regAddr2').value='';
+  document.getElementById('addrModal').style.display='none';
+  document.getElementById('regAddr2').focus();
+}
+
+function showTerms(type){
+  const content={
+    '이용약관':'<h4>제1조 (목적)</h4><p>이 약관은 행정안전부가 운영하는 국민재난대피포털(이하 "포털")의 이용조건 및 절차, 이용자와 포털 간의 권리·의무 및 책임사항을 규정함을 목적으로 합니다.</p><br><h4>제2조 (용어의 정의)</h4><p>"이용자"란 포털에 접속하여 이 약관에 따라 포털이 제공하는 서비스를 받는 회원을 말합니다.</p><br><h4>제3조 (약관의 효력)</h4><p>이 약관은 포털 화면에 게시하거나 기타의 방법으로 이용자에게 공시함으로써 효력이 발생합니다.</p>',
+    '개인정보 수집·이용':'<h4>수집하는 개인정보 항목</h4><p><strong>필수:</strong> 아이디, 비밀번호, 이름, 생년월일, 휴대전화번호</p><p><strong>선택:</strong> 이메일, 주소, 비상연락처</p><br><h4>수집 및 이용 목적</h4><p>· 회원 식별 및 서비스 제공<br>· 재난 발생 시 위치 파악 및 대피 유도<br>· 가족 찾기 서비스 제공<br>· 재난문자 발송</p><br><h4>보유 및 이용기간</h4><p>회원 탈퇴 후 30일까지 보유 후 파기 (법령에 의한 경우 별도 보유)</p>',
+    '위치정보 이용':'<h4>위치정보 수집 목적</h4><p>· 내 주변 대피소 찾기<br>· 가족 위치 공유 및 찾기<br>· 재난 발생 시 대피 경로 안내</p><br><h4>위치정보 보유기간</h4><p>서비스 이용 중 실시간으로 수집하며, 앱 종료 시 즉시 삭제됩니다. (체크인 기록은 30일 보관)</p><br><h4>위치정보 제3자 제공</h4><p>이용자의 동의 없이 위치정보를 제3자에게 제공하지 않습니다. 단, 구조 요청 등 긴급 상황의 경우 예외가 적용됩니다.</p>',
+    '제3자 제공':'<h4>제공받는 기관</h4><p>소방청, 경찰청, 지방자치단체 재난안전과</p><br><h4>제공 목적</h4><p>재난 발생 시 신속한 구조 및 대피 지원</p><br><h4>제공 항목</h4><p>이름, 연락처, 현재 위치, 특별보호 여부</p><br><h4>보유 기간</h4><p>재난 종료 후 1년</p>',
+  };
+  document.getElementById('termTitle').textContent=type;
+  document.getElementById('termContent').innerHTML=content[type]||'준비 중입니다.';
+  document.getElementById('termModal').classList.add('open');
+}
+
+function closeTerms(){
+  document.getElementById('termModal').classList.remove('open');
+}
+const ADMINS={manager:'manager1234',admin2:'admin2024'};
+const ANAMES={manager:'김담당 (재난관리팀)',admin2:'이운영 (시설관리팀)'};
+
+function openLoginModal(){document.getElementById('loginModalBg').classList.add('open');}
+function closeLoginModal(){document.getElementById('loginModalBg').classList.remove('open');}
+function showIdLoginModal(){document.getElementById('modalMethods').style.display='none';document.getElementById('modalIdForm').classList.add('show');}
+function backToMethodsModal(){document.getElementById('modalMethods').style.display='';document.getElementById('modalIdForm').classList.remove('show');}
+function doModalLogin(){
+  const id=document.getElementById('modalId').value.trim();
+  const pw=document.getElementById('modalPw').value;
+  if(!id||!pw){alert('아이디와 비밀번호를 입력하세요.');return;}
+  if(ADMINS[id]===pw){sessionStorage.setItem('accessToken','mock-admin-token');sessionStorage.setItem('user',JSON.stringify({userId:0,role:'ADMIN',name:ANAMES[id]||id}));window.location.href='admin.html';return;}
+  if(pw.length>=4){sessionStorage.setItem('user',JSON.stringify({name:'김안전',phone:id}));location.reload();}
+  else{document.getElementById('modalErr').classList.add('show');}
+}
+function initHeader(){
+  const raw=sessionStorage.getItem('user');
+  const el=document.getElementById('hdrUtil');
+  if(!el)return;
+  if(raw){try{const u=JSON.parse(raw);el.innerHTML=`<span class="h-username">${u.name||'사용자'} 님</span><button class="btn-join" onclick="location.href='mypage.html'">마이페이지</button><button class="btn-logout" onclick="sessionStorage.clear();location.reload()">로그아웃</button>`;}catch(e){}}
+  else{el.innerHTML=`<button class="btn-login-h" onclick="openLoginModal()">로그인</button><button class="btn-join" onclick="location.href='signup.html'">회원가입</button>`;}
+}
+function hdrSearch(){const q=document.getElementById('hdrSrch').value.trim();if(q)alert(`"${q}" 검색 기능은 준비 중입니다.`);}
+initHeader();
+</script>
+
+<!-- 주소 검색 모달 -->
+<div id="addrModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:3000;align-items:center;justify-content:center;" onclick="if(event.target===this)this.style.display='none'">
+  <div style="background:#fff;width:520px;max-width:96vw;box-shadow:0 8px 32px rgba(0,0,0,.22);border-top:4px solid var(--navy);">
+    <div style="padding:13px 18px;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:center;">
+      <span style="font-size:16px;font-weight:700;color:var(--navy);">주소 검색</span>
+      <button onclick="document.getElementById('addrModal').style.display='none'" style="background:none;border:none;font-size:22px;cursor:pointer;color:#888;line-height:1;">✕</button>
+    </div>
+    <div style="padding:14px 18px;border-bottom:1px solid #eee;display:flex;gap:8px;">
+      <input type="text" id="addrSrchInput" placeholder="도로명·지번·우편번호 입력 (예: 강남, 세종대로)" style="flex:1;border:1px solid #ccc;padding:10px 13px;font-size:14px;font-family:inherit;outline:none;" onkeydown="if(event.key==='Enter')doAddrSearch()">
+      <button onclick="doAddrSearch()" style="background:var(--navy);color:#fff;border:none;padding:10px 20px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">검색</button>
+    </div>
+    <div id="addrSrchResults" style="max-height:360px;overflow-y:auto;"></div>
+  </div>
+</div>
+</body>
+</html>

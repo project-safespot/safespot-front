@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>관리자 대시보드 - 국민재난대피포털</title>
+<link rel="stylesheet" href="_common.css">
+<style>
+header{background:#1a2a4a;}
+.h-logo-texts strong{color:#fff;}
+.h-logo-texts span{color:rgba(255,255,255,.55);}
+.admin-badge{background:var(--red);color:#fff;font-size:13px;font-weight:700;padding:4px 13px;letter-spacing:.5px;}
+.admin-user{font-size:15px;color:rgba(255,255,255,.8);}
+.admin-user strong{color:#fff;}
+
+.admin-nav{height:50px;background:#263850;border-bottom:3px solid var(--red);display:flex;align-items:center;}
+.admin-nav-inner{max-width:1440px;margin:0 auto;padding:0 28px;display:flex;width:100%;height:100%;}
+.an-item{padding:0 22px;height:50px;display:flex;align-items:center;font-size:16px;font-weight:600;color:rgba(255,255,255,.8);cursor:pointer;border-right:1px solid rgba(255,255,255,.1);transition:background .15s;white-space:nowrap;}
+.an-item:hover,.an-item.on{background:rgba(255,255,255,.15);color:#fff;}
+
+/* 요약 카드 */
+.sum-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:22px;}
+.sum-card{background:#fff;border:1px solid var(--border);border-left:4px solid;padding:18px 20px;}
+.sum-label{font-size:14px;color:var(--muted);margin-bottom:6px;}
+.sum-value{font-size:30px;font-weight:800;line-height:1;}
+.sum-sub{font-size:13px;color:#aaa;margin-top:5px;}
+.bc-b{border-color:var(--navy);} .bc-g{border-color:#27ae60;} .bc-y{border-color:#e67e22;} .bc-r{border-color:var(--red);} .bc-gray{border-color:#888;}
+.cv-b{color:var(--navy);} .cv-g{color:#27ae60;} .cv-y{color:#e67e22;} .cv-r{color:var(--red);} .cv-gray{color:#888;}
+
+.tab-content{display:none;} .tab-content.on{display:block;}
+
+/* 테이블 */
+.tbl-wrap{background:#fff;border:1px solid var(--border);overflow-x:auto;margin-bottom:22px;}
+table{width:100%;border-collapse:collapse;}
+thead tr{background:var(--navy);color:#fff;}
+thead th{padding:12px 13px;font-size:14px;font-weight:600;text-align:left;white-space:nowrap;}
+tbody tr{border-bottom:1px solid #f0f4fa;transition:background .1s;}
+tbody tr:hover{background:#f8faff;}
+tbody td{padding:11px 13px;font-size:15px;}
+.sb{font-size:13px;font-weight:700;padding:3px 10px;border:1px solid;white-space:nowrap;}
+.sb-g{color:#27ae60;border-color:#27ae60;background:#f0faf0;} .sb-y{color:#e67e22;border-color:#e67e22;background:#fff8f0;} .sb-r{color:var(--red);border-color:var(--red);background:#fff0f0;}
+.mini-bar{display:flex;align-items:center;gap:6px;}
+.mini-bg{width:80px;height:7px;background:#eee;flex-shrink:0;}
+.mini-fill{height:100%;}
+
+/* 인원집중 */
+.crowd-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:22px;}
+.crowd-card{background:#fff;border:1px solid var(--border);padding:18px;}
+.crowd-card h4{font-size:15px;font-weight:700;margin-bottom:4px;}
+.crowd-addr{font-size:13px;color:var(--muted);margin-bottom:12px;}
+.gauge-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
+.gauge-bg{flex:1;height:14px;background:#eee;}
+.gauge-fill{height:100%;}
+.gauge-pct{font-size:15px;font-weight:800;width:42px;text-align:right;}
+.flag-a{background:var(--red);color:#fff;font-size:11px;font-weight:700;padding:2px 7px;margin-left:5px;}
+.flag-w{background:#e67e22;color:#fff;font-size:11px;font-weight:700;padding:2px 7px;margin-left:5px;}
+
+/* 버튼 */
+.btn-edit{background:#fff;color:var(--navy);border:1px solid var(--navy);padding:5px 13px;font-size:13px;cursor:pointer;font-family:inherit;}
+.btn-edit:hover{background:#eef2fb;}
+.btn-stop{background:#fff0f0;color:var(--red);border:1px solid var(--red);padding:5px 13px;font-size:13px;cursor:pointer;font-family:inherit;}
+.btn-open{background:#f0faf0;color:#27ae60;border:1px solid #27ae60;padding:5px 13px;font-size:13px;cursor:pointer;font-family:inherit;}
+.btn-scatter{width:100%;background:#fff3e0;color:#e67e22;border:1px solid #e67e22;padding:7px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;margin-top:10px;}
+
+/* 모달 */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:999;align-items:center;justify-content:center;}
+.modal-bg.open{display:flex;}
+.modal{background:#fff;border-top:4px solid var(--navy);max-height:92vh;overflow-y:auto;}
+.modal-head{padding:16px 20px;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:#fff;z-index:1;}
+.modal-head h3{font-size:18px;font-weight:700;color:var(--navy);}
+.modal-close{background:none;border:none;font-size:22px;cursor:pointer;color:#888;}
+.modal-body{padding:20px;}
+.modal-foot{padding:14px 20px;border-top:1px solid #eee;display:flex;justify-content:flex-end;gap:8px;position:sticky;bottom:0;background:#fff;}
+.mf-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.mf-row{margin-bottom:0;}
+.mf-row.full{grid-column:1/-1;}
+.mf-row label{display:block;font-size:14px;font-weight:600;color:#444;margin-bottom:6px;}
+.mf-row input,.mf-row select,.mf-row textarea{width:100%;border:1px solid #ccc;padding:9px 12px;font-size:15px;font-family:inherit;outline:none;}
+.mf-row input:focus,.mf-row select:focus{border-color:var(--navy);}
+.mf-row textarea{height:80px;resize:vertical;}
+.btn-save{background:var(--navy);color:#fff;border:none;padding:10px 26px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;}
+.btn-cancel{background:#fff;color:#555;border:1px solid #bbb;padding:10px 22px;font-size:15px;cursor:pointer;font-family:inherit;}
+
+/* 로그 */
+.lt-ok{color:#27ae60;font-weight:600;} .lt-warn{color:#e67e22;font-weight:600;} .lt-crit{color:var(--red);font-weight:700;}
+
+/* 입소자 관리 */
+.resident-bar{display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap;}
+.resident-bar input,.resident-bar select{border:1px solid #ccc;padding:9px 12px;font-size:15px;font-family:inherit;outline:none;}
+.badge-special{background:#7c3aed;color:#fff;font-size:12px;font-weight:700;padding:2px 8px;border-radius:2px;}
+.badge-health{background:#e67e22;color:#fff;font-size:12px;font-weight:700;padding:2px 8px;border-radius:2px;}
+/* 대량 입력 */
+.bulk-wrap{background:#f8faff;border:1px solid var(--border);padding:18px;margin-bottom:18px;}
+.bulk-wrap h4{font-size:15px;font-weight:700;color:var(--navy);margin-bottom:8px;}
+.bulk-wrap p{font-size:13px;color:var(--muted);margin-bottom:10px;line-height:1.6;}
+.bulk-wrap textarea{width:100%;height:160px;border:1px solid #ccc;padding:10px;font-size:13px;font-family:monospace;outline:none;resize:vertical;}
+.bulk-wrap textarea:focus{border-color:var(--navy);}
+.bulk-template{font-size:12px;color:#888;background:#fff;border:1px solid #ddd;padding:8px 12px;margin-bottom:8px;font-family:monospace;line-height:1.8;white-space:pre;}
+
+/* 인증 오버레이 */
+#authOverlay{position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+.auth-card{background:#fff;border:1px solid var(--border);border-top:4px solid var(--navy);width:420px;padding:38px 34px;}
+.auth-card h2{font-size:22px;font-weight:800;color:var(--navy);margin-bottom:5px;}
+.auth-card p{font-size:14px;color:var(--muted);margin-bottom:24px;}
+.auth-err{background:#fff0f0;border:1px solid #fcc;color:var(--red);font-size:14px;padding:9px 12px;margin-bottom:12px;display:none;}
+
+@media(max-width:1100px){.sum-grid{grid-template-columns:repeat(3,1fr);}.crowd-grid{grid-template-columns:1fr 1fr;}}
+</style>
+</head>
+<body>
+
+<!-- 인증 오버레이 -->
+<div id="authOverlay">
+  <div class="auth-card">
+    <h2>관리자 로그인</h2>
+    <p>권한이 부여된 관리자 계정으로만 접속 가능합니다</p>
+    <div class="auth-err" id="authErr">아이디 또는 비밀번호가 올바르지 않습니다.</div>
+    <div style="margin-bottom:13px;">
+      <label style="display:block;font-size:14px;font-weight:600;color:#444;margin-bottom:6px;">관리자 아이디</label>
+      <input type="text" id="aId" style="width:100%;border:1px solid #ccc;padding:10px 12px;font-size:15px;font-family:inherit;outline:none;" placeholder="관리자 아이디" onkeydown="if(event.key==='Enter')authLogin()">
+    </div>
+    <div style="margin-bottom:20px;">
+      <label style="display:block;font-size:14px;font-weight:600;color:#444;margin-bottom:6px;">비밀번호</label>
+      <input type="password" id="aPw" style="width:100%;border:1px solid #ccc;padding:10px 12px;font-size:15px;font-family:inherit;outline:none;" placeholder="비밀번호" onkeydown="if(event.key==='Enter')authLogin()">
+    </div>
+    <button onclick="authLogin()" style="width:100%;background:var(--navy);color:#fff;border:none;padding:12px;font-size:16px;font-weight:700;cursor:pointer;font-family:inherit;">로그인</button>
+    <div style="text-align:center;margin-top:14px;font-size:14px;"><a href="index.html" style="color:var(--muted);">← 일반 사용자 페이지로</a></div>
+    <div style="text-align:center;margin-top:8px;font-size:13px;color:#aaa;">※ 무단 접근 시 관련 법령에 따라 처벌받을 수 있습니다.</div>
+    <div style="margin-top:14px;padding:10px;background:#f0f4ff;border:1px solid #c0d0ee;font-size:13px;color:#444;line-height:1.7;">
+      <strong>데모 계정</strong><br>
+      admin / admin1234<br>manager / manager1234<br>admin2 / admin2024
+    </div>
+  </div>
+</div>
+
+<!-- 정부 최상단 바 -->
+<div class="govbar">
+  <div class="govbar-inner">
+    <div class="govbar-left"><span class="taeguk"></span>이 누리집은 대한민국 공식 전자정부 누리집입니다.</div>
+    <div class="govbar-right"><a href="index.html">일반 사용자 페이지</a></div>
+  </div>
+</div>
+
+<!-- 헤더 -->
+<header>
+  <div class="header-inner">
+    <a href="admin.html" class="h-logo">
+      <div class="h-logo-mark" style="background:var(--red);">
+        <svg viewBox="0 0 34 34" fill="none"><circle cx="17" cy="17" r="16" fill="#1a2a4a" stroke="rgba(255,255,255,.3)" stroke-width="1"/><path d="M17 5 L29 12 L29 22 L17 29 L5 22 L5 12Z" fill="none" stroke="rgba(255,255,255,.3)" stroke-width="1"/><circle cx="17" cy="17" r="5" fill="#fff"/></svg>
+      </div>
+      <div class="h-logo-texts">
+        <strong>국민재난대피포털 관리자</strong>
+        <span>국민 재난 대피 안전 서비스 운영관리시스템</span>
+      </div>
+    </a>
+    <div class="h-util">
+      <span class="admin-badge">ADMIN</span>
+      <span class="admin-user">담당: <strong id="adminNameDisp"></strong></span>
+      <span style="font-size:13px;color:rgba(255,255,255,.45)" id="updDisp"></span>
+      <button class="btn-primary" style="font-size:14px;padding:8px 18px;" onclick="doLogout()">로그아웃</button>
+    </div>
+  </div>
+</header>
+
+<!-- 관리자 서브메뉴 -->
+<div class="admin-nav">
+  <div class="admin-nav-inner">
+    <div class="an-item on" onclick="switchTab('monitor',this)">실시간 모니터링</div>
+    <div class="an-item" onclick="switchTab('crowd',this)">인원 집중 현황</div>
+    <div class="an-item" onclick="switchTab('manage',this)">대피소 운영 관리</div>
+    <div class="an-item" onclick="switchTab('resident',this)">입소자 관리</div>
+    <div class="an-item" onclick="switchTab('stats',this)">통계 현황</div>
+    <div class="an-item" onclick="switchTab('log',this)">운영 로그</div>
+  </div>
+</div>
+
+<div class="wrap" style="padding-top:22px;padding-bottom:40px;">
+
+  <!-- 요약 카드 -->
+  <div class="sum-grid">
+    <div class="sum-card bc-b"><div class="sum-label">전체 대피소</div><div class="sum-value cv-b">24</div><div class="sum-sub">강남구 관할 전체</div></div>
+    <div class="sum-card bc-g"><div class="sum-label">여유 대피소</div><div class="sum-value cv-g" id="cntG">-</div><div class="sum-sub">수용률 50% 미만</div></div>
+    <div class="sum-card bc-y"><div class="sum-label">보통 대피소</div><div class="sum-value cv-y" id="cntY">-</div><div class="sum-sub">수용률 50~80%</div></div>
+    <div class="sum-card bc-r"><div class="sum-label">혼잡 대피소</div><div class="sum-value cv-r" id="cntR">-</div><div class="sum-sub">수용률 80% 이상</div></div>
+    <div class="sum-card bc-gray"><div class="sum-label">총 입소 인원</div><div class="sum-value cv-gray" id="cntTot">-</div><div class="sum-sub">현재 대피 중</div></div>
+  </div>
+
+  <!-- 탭: 실시간 모니터링 -->
+  <div class="tab-content on" id="tab-monitor">
+    <div class="sec-ttl">대피소별 좌석 현황 실시간 모니터링</div>
+    <div style="background:#e8f0fb;border:1px solid #b8ceee;padding:11px 16px;font-size:15px;color:#1a3a6c;margin-bottom:14px;">
+      자동 갱신: 5초마다 인원 현황을 업데이트합니다. 마지막 갱신: <strong id="monTime"></strong>
+    </div>
+    <div class="tbl-wrap"><table><thead><tr><th>No.</th><th>대피소명</th><th>주소</th><th>유형</th><th>수용</th><th>현재</th><th>혼잡도</th><th>상태</th><th>운영</th><th>담당자</th><th>수정</th></tr></thead><tbody id="monBody"></tbody></table></div>
+  </div>
+
+  <!-- 탭: 인원 집중 현황 -->
+  <div class="tab-content" id="tab-crowd">
+    <div class="sec-ttl">인원 집중 현상 확인</div>
+    <div id="crowdAlert" style="background:#fff3e0;border:1px solid #ffe0a0;border-left:4px solid #e67e22;padding:12px 16px;margin-bottom:18px;font-size:15px;color:#7a4800;"></div>
+    <div class="crowd-grid" id="crowdGrid"></div>
+    <div class="sec-ttl">분산 권고 현황</div>
+    <div class="tbl-wrap"><table><thead><tr><th>혼잡 대피소</th><th>수용률</th><th>권고 이동 대피소</th><th>권고 대피소 수용률</th><th>거리</th><th>조치</th></tr></thead><tbody id="scatterBody"></tbody></table></div>
+  </div>
+
+  <!-- 탭: 운영 관리 -->
+  <div class="tab-content" id="tab-manage">
+    <div class="sec-ttl">대피소 정보 수정 및 운영 관리</div>
+    <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
+      <input type="text" id="manSrch" placeholder="대피소명·주소 검색..." style="border:1px solid #ccc;padding:9px 12px;font-size:15px;font-family:inherit;outline:none;width:260px;" oninput="renderManage()">
+      <select id="manSt" style="border:1px solid #ccc;padding:9px 12px;font-size:15px;font-family:inherit;outline:none;" onchange="renderManage()"><option value="all">전체 상태</option><option>여유</option><option>보통</option><option>혼잡</option></select>
+      <select id="manOp" style="border:1px solid #ccc;padding:9px 12px;font-size:15px;font-family:inherit;outline:none;" onchange="renderManage()"><option value="all">전체 운영</option><option>운영 중</option><option>운영 중단</option><option>점검 중</option></select>
+    </div>
+    <div class="tbl-wrap"><table><thead><tr><th>No.</th><th>대피소명</th><th>주소</th><th>수용</th><th>현재</th><th>혼잡도</th><th>상태</th><th>운영</th><th>담당자</th><th>연락처</th><th>관리</th></tr></thead><tbody id="manBody"></tbody></table></div>
+  </div>
+
+  <!-- 탭: 입소자 관리 -->
+  <div class="tab-content" id="tab-resident">
+    <div class="sec-ttl">입소자 관리 — 개인정보 입력 및 조회</div>
+
+    <!-- 대량 입력 섹션 -->
+    <div class="bulk-wrap">
+      <h4>대량 입력 (붙여넣기)</h4>
+      <p>아래 양식에 맞춰 여러 명의 정보를 한 번에 입력하세요. 한 줄에 한 명씩 입력하며, 각 항목은 탭(Tab) 또는 쉼표(,)로 구분합니다.</p>
+      <div class="bulk-template">성명,주민번호앞6자리,연락처,주소,가족구성,건강상태,특별보호대상여부,입소시설,배정구역
+홍길동,900101,010-1234-5678,서울 강남구 역삼동,부부+자녀2,고혈압,해당없음,역삼동 주민센터 대피소,A동 101호
+김순이,450823,010-9876-5432,서울 강남구 삼성동,독거노인,당뇨+심장,노인단독세대,강남구민회관,B동 205호</div>
+      <textarea id="bulkInput" placeholder="위 양식에 맞춰 데이터를 붙여넣으세요..."></textarea>
+      <div style="display:flex;gap:10px;margin-top:10px;">
+        <button class="btn-edit" onclick="parseBulk()">붙여넣기 입력 처리</button>
+        <button class="btn-edit" onclick="document.getElementById('bulkInput').value=''">초기화</button>
+      </div>
+    </div>
+
+    <!-- 개별 추가 -->
+    <div style="display:flex;gap:10px;align-items:center;margin-bottom:16px;">
+      <div class="sec-ttl" style="margin-bottom:0;border-bottom:none;padding-bottom:0;">입소자 목록</div>
+      <button class="btn-edit" onclick="openResidentModal(null)" style="margin-left:auto;">+ 개별 추가</button>
+      <button class="btn-edit" onclick="exportCSV()">CSV 내보내기</button>
+    </div>
+
+    <!-- 검색/필터 -->
+    <div class="resident-bar">
+      <input type="text" id="resSrch" placeholder="성명, 대피소 검색..." style="width:220px;" oninput="renderResidents()">
+      <select id="resFilter" style="border:1px solid #ccc;padding:9px 12px;font-size:15px;font-family:inherit;outline:none;" onchange="renderResidents()">
+        <option value="all">전체 시설</option>
+        <option>역삼동 주민센터 대피소</option>
+        <option>강남구민회관</option>
+        <option>역삼초등학교 체육관</option>
+        <option>선릉역 대피 공간</option>
+      </select>
+      <select id="resSpecial" style="border:1px solid #ccc;padding:9px 12px;font-size:15px;font-family:inherit;outline:none;" onchange="renderResidents()">
+        <option value="all">전체</option>
+        <option value="Y">특별보호대상만</option>
+      </select>
+    </div>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>No.</th><th>성명</th><th>주민번호(앞6)</th><th>연락처</th><th>주소</th><th>가족 구성</th><th>건강 상태</th><th>특별보호</th><th>입소 시설</th><th>배정 구역</th><th>입소일시</th><th>관리</th></tr></thead>
+        <tbody id="resBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 탭: 통계 -->
+  <div class="tab-content" id="tab-stats">
+    <div class="sec-ttl">통계 현황</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:22px;">
+      <div style="background:#fff;border:1px solid var(--border);padding:20px;">
+        <div style="font-size:15px;font-weight:700;color:var(--navy);margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border);">유형별 대피소 현황</div>
+        <table style="font-size:15px;width:100%;"><tr style="border-bottom:1px solid #eee;"><td style="padding:8px 0;color:#555;">민방위 대피소</td><td style="padding:8px 0;text-align:right;font-weight:700;color:var(--navy);">12개소</td></tr><tr style="border-bottom:1px solid #eee;"><td style="padding:8px 0;color:#555;">재난 대피소</td><td style="padding:8px 0;text-align:right;font-weight:700;color:var(--navy);">7개소</td></tr><tr style="border-bottom:1px solid #eee;"><td style="padding:8px 0;color:#555;">지하철 대피소</td><td style="padding:8px 0;text-align:right;font-weight:700;color:var(--navy);">3개소</td></tr><tr><td style="padding:8px 0;color:#555;">임시 대피소</td><td style="padding:8px 0;text-align:right;font-weight:700;color:var(--navy);">2개소</td></tr></table>
+      </div>
+      <div style="background:#fff;border:1px solid var(--border);padding:20px;">
+        <div style="font-size:15px;font-weight:700;color:var(--navy);margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border);">시간대별 입소 현황 (오늘)</div>
+        <table style="font-size:15px;width:100%;"><tr style="border-bottom:1px solid #eee;"><td style="padding:8px 0;color:#555;">06:00~08:00</td><td style="padding:8px 0;text-align:right;font-weight:700;">342명</td></tr><tr style="border-bottom:1px solid #eee;"><td style="padding:8px 0;color:#555;">08:00~10:00</td><td style="padding:8px 0;text-align:right;font-weight:700;color:var(--red);">1,847명</td></tr><tr style="border-bottom:1px solid #eee;"><td style="padding:8px 0;color:#555;">10:00~12:00</td><td style="padding:8px 0;text-align:right;font-weight:700;color:#e67e22;">1,203명</td></tr><tr><td style="padding:8px 0;color:#555;">12:00 이후</td><td style="padding:8px 0;text-align:right;font-weight:700;">891명</td></tr></table>
+      </div>
+      <div style="background:#fff;border:1px solid var(--border);padding:20px;">
+        <div style="font-size:15px;font-weight:700;color:var(--navy);margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border);">입소자 특성 현황</div>
+        <table style="font-size:15px;width:100%;"><tr style="border-bottom:1px solid #eee;"><td style="padding:8px 0;color:#555;">총 입소자</td><td style="padding:8px 0;text-align:right;font-weight:700;color:#27ae60;" id="statTotal">-</td></tr><tr style="border-bottom:1px solid #eee;"><td style="padding:8px 0;color:#555;">특별보호대상</td><td style="padding:8px 0;text-align:right;font-weight:700;color:var(--red);" id="statSpecial">-</td></tr><tr style="border-bottom:1px solid #eee;"><td style="padding:8px 0;color:#555;">건강이상자</td><td style="padding:8px 0;text-align:right;font-weight:700;color:#e67e22;">12명</td></tr><tr><td style="padding:8px 0;color:#555;">미연락 가족</td><td style="padding:8px 0;text-align:right;font-weight:700;color:var(--red);">7명</td></tr></table>
+      </div>
+    </div>
+    <div class="sec-ttl">구별 대피소 비교</div>
+    <div class="tbl-wrap"><table><thead><tr><th>자치구</th><th>대피소 수</th><th>총 수용</th><th>현재 입소</th><th>평균 혼잡도</th><th>긴급 알림</th></tr></thead><tbody>
+      <tr><td style="font-weight:600;">강남구</td><td>24</td><td>8,400명</td><td style="color:var(--red);font-weight:700;">4,283명</td><td><span class="sb sb-y">51%</span></td><td style="color:var(--red);font-weight:600;">3건</td></tr>
+      <tr><td style="font-weight:600;">서초구</td><td>18</td><td>6,200명</td><td style="color:#e67e22;font-weight:700;">2,914명</td><td><span class="sb sb-y">47%</span></td><td style="color:#e67e22;font-weight:600;">1건</td></tr>
+      <tr><td style="font-weight:600;">송파구</td><td>21</td><td>7,500명</td><td style="font-weight:700;">1,820명</td><td><span class="sb sb-g">24%</span></td><td style="color:#27ae60;">0건</td></tr>
+      <tr><td style="font-weight:600;">강동구</td><td>16</td><td>5,400명</td><td style="font-weight:700;">1,102명</td><td><span class="sb sb-g">20%</span></td><td style="color:#27ae60;">0건</td></tr>
+      <tr><td style="font-weight:600;">강서구</td><td>14</td><td>4,800명</td><td style="color:var(--red);font-weight:700;">4,100명</td><td><span class="sb sb-r">85%</span></td><td style="color:var(--red);font-weight:700;">5건</td></tr>
+    </tbody></table></div>
+  </div>
+
+  <!-- 탭: 운영 로그 -->
+  <div class="tab-content" id="tab-log">
+    <div class="sec-ttl">운영 로그</div>
+    <div style="display:flex;gap:10px;margin-bottom:16px;">
+      <select style="border:1px solid #ccc;padding:9px 12px;font-size:15px;font-family:inherit;outline:none;"><option>전체 구분</option><option>혼잡경보</option><option>정보수정</option><option>분산안내</option><option>정상</option></select>
+      <input type="date" value="2026-04-08" style="border:1px solid #ccc;padding:9px 12px;font-size:15px;font-family:inherit;outline:none;">
+      <button style="background:var(--navy);color:#fff;border:none;padding:9px 20px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit;">조회</button>
+    </div>
+    <div class="tbl-wrap"><table><thead><tr><th>시각</th><th>구분</th><th>대피소</th><th>내용</th><th>처리자</th></tr></thead><tbody id="logBody">
+      <tr><td>09:52</td><td class="lt-crit">혼잡경보</td><td>강남구민회관</td><td>수용률 83% 초과 — 혼잡 상태 자동 전환</td><td>시스템</td></tr>
+      <tr><td>09:40</td><td class="lt-warn">수용인원수정</td><td>강남구민회관</td><td>수용 가능 인원 450→500명으로 변경 (긴급 확장)</td><td>admin</td></tr>
+      <tr><td>09:10</td><td class="lt-ok">입소등록</td><td>강남구민회관</td><td>홍길동 입소 등록 (배정구역: A-3)</td><td>admin</td></tr>
+      <tr><td>09:05</td><td class="lt-ok">로그인</td><td>-</td><td>관리자 로그인</td><td>manager</td></tr>
+    </tbody></table></div>
+  </div>
+</div>
+
+<!-- 대피소 수정 모달 -->
+<div class="modal-bg" id="editModal" onclick="if(event.target===this)this.classList.remove('open')">
+  <div class="modal" style="width:580px;">
+    <div class="modal-head"><h3>대피소 정보 수정</h3><button class="modal-close" onclick="document.getElementById('editModal').classList.remove('open')">✕</button></div>
+    <div class="modal-body">
+      <div class="mf-grid">
+        <div class="mf-row full"><label>대피소명</label><input type="text" id="eNm"></div>
+        <div class="mf-row full"><label>주소</label><input type="text" id="eAddr"></div>
+        <div class="mf-row"><label>수용 최대 인원 (명)</label><input type="number" id="eCap" placeholder="최대 수용 가능 인원"></div>
+        <div class="mf-row"><label>대피소 유형</label><select id="eType"><option>민방위 대피소</option><option>재난 대피소</option><option>지하철 대피소</option><option>임시 대피소</option></select></div>
+        <div class="mf-row"><label>운영 상태</label><select id="eOp"><option>운영 중</option><option>운영 중단</option><option>점검 중</option><option>만원</option></select></div>
+        <div class="mf-row"><label>담당자</label><input type="text" id="eMgr"></div>
+        <div class="mf-row"><label>연락처</label><input type="text" id="eTel"></div>
+        <div class="mf-row full"><label>수정 사유 <span style="color:var(--red)">*</span></label><input type="text" id="eReason" placeholder="수정 사유를 입력하세요 (필수)"></div>
+        <div class="mf-row full"><label>비고</label><textarea id="eNote" placeholder="특이사항"></textarea></div>
+      </div>
+    </div>
+    <div class="modal-foot"><button class="btn-cancel" onclick="document.getElementById('editModal').classList.remove('open')">취소</button><button class="btn-save" onclick="saveEdit()">저장</button></div>
+  </div>
+</div>
+
+<!-- 입소자 개별 입력 모달 -->
+<div class="modal-bg" id="resModal" onclick="if(event.target===this)this.classList.remove('open')">
+  <div class="modal" style="width:640px;">
+    <div class="modal-head"><h3 id="resModalTitle">입소자 정보 입력</h3><button class="modal-close" onclick="document.getElementById('resModal').classList.remove('open')">✕</button></div>
+    <div class="modal-body">
+      <div class="mf-grid">
+        <div class="mf-row"><label>성명 <span style="color:var(--red)">*</span></label><input type="text" id="rNm" placeholder="홍길동"></div>
+        <div class="mf-row"><label>주민등록번호 앞 6자리 <span style="color:var(--red)">*</span></label><input type="text" id="rRrn" placeholder="900101" maxlength="6"></div>
+        <div class="mf-row"><label>연락처 <span style="color:var(--red)">*</span></label><input type="tel" id="rTel" placeholder="010-0000-0000"></div>
+        <div class="mf-row"><label>비상 연락처</label><input type="tel" id="rTel2" placeholder="010-0000-0000"></div>
+        <div class="mf-row full"><label>주소 <span style="color:var(--red)">*</span></label><input type="text" id="rAddr" placeholder="서울특별시 강남구 역삼동 123"></div>
+        <div class="mf-row full"><label>가족 구성</label><input type="text" id="rFamily" placeholder="예: 부부+자녀2명, 독거노인, 1인가구 등"></div>
+        <div class="mf-row full"><label>건강 상태</label><input type="text" id="rHealth" placeholder="예: 고혈압, 당뇨, 심장질환, 이상 없음 등"></div>
+        <div class="mf-row"><label>특별 보호 대상 여부</label>
+          <select id="rSpecial"><option value="N">해당 없음</option><option value="Y">노인 단독 세대</option><option value="Y">장애인</option><option value="Y">임산부</option><option value="Y">만성질환자</option><option value="Y">영유아 동반</option></select>
+        </div>
+        <div class="mf-row"><label>입소 시설 <span style="color:var(--red)">*</span></label>
+          <select id="rShelter"><option>역삼동 주민센터 대피소</option><option>강남구민회관</option><option>역삼초등학교 체육관</option><option>대치2동 복지센터</option><option>선릉역 대피 공간</option><option>삼성동 종합사회복지관</option><option>코엑스 지하 광장</option></select>
+        </div>
+        <div class="mf-row full"><label>배정 구역 / 호실</label><input type="text" id="rRoom" placeholder="예: A동 101호, 2층 강당 좌측 등"></div>
+        <div class="mf-row full"><label>특이 사항</label><textarea id="rNote" placeholder="기타 특이사항을 입력하세요"></textarea></div>
+      </div>
+    </div>
+    <div class="modal-foot"><button class="btn-cancel" onclick="document.getElementById('resModal').classList.remove('open')">취소</button><button class="btn-save" onclick="saveResident()">저장</button></div>
+  </div>
+</div>
+
+<script>
+/* ── 인증 ── */
+const ADMINS={admin:'admin1234',manager:'manager1234',admin2:'admin2024'};
+const ANAMES={admin:'홍관리 (강남구청)',manager:'김담당 (재난관리팀)',admin2:'이운영 (시설관리팀)'};
+function authLogin(){
+  const id=document.getElementById('aId').value.trim();
+  const pw=document.getElementById('aPw').value;
+  if(ADMINS[id]===pw){
+    sessionStorage.setItem('adminId',id);
+    sessionStorage.setItem('adminName',ANAMES[id]||id);
+    document.getElementById('authOverlay').style.display='none';
+    initDash(id);
+  } else { document.getElementById('authErr').style.display='block'; document.getElementById('aPw').value=''; }
+}
+window.addEventListener('DOMContentLoaded',()=>{
+  // 인증 상태는 accessToken + user.role 기준으로 판단
+  if(isAdmin()){
+    document.getElementById('authOverlay').style.display='none';
+    const u=getUser();
+    initDash(u?u.name:'admin');
+  }
+});
+function initDash(id){
+  const _u=getUser(); if(document.getElementById('adminNameDisp')) document.getElementById('adminNameDisp').textContent=_u?_u.name:'';
+  renderAll();
+  setInterval(()=>{ shelters.forEach(s=>{const d=Math.floor(Math.random()*7)-3;s.cur=Math.max(0,Math.min(s.cap,s.cur+d));}); renderAll(); upd(); },5000);
+  upd();
+}
+function upd(){ document.getElementById('updDisp').textContent='갱신: '+new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',second:'2-digit'}); }
+
+/* ── 대피소 데이터 ── */
+// TODO: 백엔드 연결 시 fetchAdminDashboard()로 교체
+const shelters=[
+  {id:1,name:'역삼동 주민센터 대피소',addr:'강남구 역삼동 736',cap:300,cur:85,type:'민방위 대피소',op:'운영 중',mgr:'이담당',tel:'02-3423-5114'},
+  {id:2,name:'강남구민회관',addr:'강남구 삼성동 142',cap:500,cur:415,type:'민방위 대피소',op:'운영 중',mgr:'박담당',tel:'02-3423-6000'},
+  {id:3,name:'역삼초등학교 체육관',addr:'강남구 역삼동 648',cap:200,cur:182,type:'재난 대피소',op:'운영 중',mgr:'최담당',tel:'02-565-1234'},
+  {id:4,name:'대치2동 복지센터',addr:'강남구 대치2동 988',cap:150,cur:42,type:'민방위 대피소',op:'운영 중',mgr:'정담당',tel:'02-3423-7200'},
+  {id:5,name:'선릉역 대피 공간',addr:'강남구 역삼동 지하1층',cap:800,cur:520,type:'지하철 대피소',op:'운영 중',mgr:'김담당',tel:'1544-7788'},
+  {id:6,name:'삼성동 종합사회복지관',addr:'강남구 삼성1동 130',cap:250,cur:218,type:'재난 대피소',op:'운영 중',mgr:'이담당',tel:'02-3452-5678'},
+  {id:7,name:'개포동 주민센터 대피소',addr:'강남구 개포1동 154',cap:180,cur:61,type:'민방위 대피소',op:'운영 중',mgr:'박담당',tel:'02-3423-4000'},
+  {id:8,name:'압구정동 지하주차장 대피소',addr:'강남구 압구정동 454',cap:600,cur:480,type:'재난 대피소',op:'운영 중',mgr:'최담당',tel:'-'},
+  {id:9,name:'청담동 문화센터',addr:'강남구 청담동 118',cap:220,cur:110,type:'민방위 대피소',op:'운영 중',mgr:'정담당',tel:'02-3445-1234'},
+  {id:10,name:'논현2동 주민센터',addr:'강남구 논현2동 22',cap:130,cur:38,type:'민방위 대피소',op:'운영 중',mgr:'김담당',tel:'02-3423-2300'},
+  {id:11,name:'도곡동 주민센터 대피소',addr:'강남구 도곡1동 467',cap:160,cur:88,type:'민방위 대피소',op:'운영 중',mgr:'이담당',tel:'02-3423-8100'},
+  {id:12,name:'일원동 복지관 지하',addr:'강남구 일원1동 642',cap:200,cur:165,type:'재난 대피소',op:'운영 중',mgr:'박담당',tel:'02-3461-2000'},
+  {id:13,name:'수서역 광장 임시 대피소',addr:'강남구 수서동 730',cap:1000,cur:340,type:'임시 대피소',op:'운영 중',mgr:'최담당',tel:'02-445-0100'},
+  {id:14,name:'세곡동 주민센터',addr:'강남구 세곡동 91',cap:120,cur:29,type:'민방위 대피소',op:'운영 중',mgr:'정담당',tel:'02-3423-9200'},
+  {id:15,name:'코엑스 지하 광장',addr:'강남구 삼성동 159',cap:2000,cur:1640,type:'지하철 대피소',op:'운영 중',mgr:'박담당',tel:'02-6000-0114'},
+  {id:16,name:'율현동 율현초 체육관',addr:'강남구 율현동 1',cap:250,cur:198,type:'재난 대피소',op:'운영 중',mgr:'이담당',tel:'02-459-3300'},
+  {id:17,name:'신사동 복합시설 지하',addr:'강남구 신사동 527',cap:400,cur:87,type:'재난 대피소',op:'운영 중',mgr:'김담당',tel:'02-3449-4114'},
+  {id:18,name:'논현1동 주민센터',addr:'강남구 논현1동 105',cap:140,cur:61,type:'민방위 대피소',op:'운영 중',mgr:'최담당',tel:'02-3423-2100'},
+  {id:19,name:'삼성2동 주민센터',addr:'강남구 삼성2동 186',cap:130,cur:44,type:'민방위 대피소',op:'점검 중',mgr:'정담당',tel:'02-3423-6200'},
+  {id:20,name:'대치4동 주민센터',addr:'강남구 대치4동 956',cap:150,cur:112,type:'민방위 대피소',op:'운영 중',mgr:'김담당',tel:'02-3423-7400'},
+  {id:21,name:'개포3동 주민센터',addr:'강남구 개포3동 1168',cap:120,cur:31,type:'민방위 대피소',op:'운영 중',mgr:'이담당',tel:'02-3423-4200'},
+  {id:22,name:'압구정현대아파트 지하',addr:'강남구 압구정동 478',cap:500,cur:122,type:'재난 대피소',op:'운영 중',mgr:'박담당',tel:'-'},
+  {id:23,name:'양재1동 주민센터',addr:'강남구 양재1동 245',cap:160,cur:73,type:'민방위 대피소',op:'운영 중',mgr:'정담당',tel:'02-3413-8100'},
+  {id:24,name:'자곡동 어울림센터',addr:'강남구 자곡동 185',cap:180,cur:55,type:'민방위 대피소',op:'운영 중',mgr:'김담당',tel:'02-3461-5500'},
+];
+
+/* ── 입소자 데이터 ── */
+let residents=[
+  {id:1,nm:'홍길동',rrn:'900101',tel:'010-1234-5678',addr:'강남구 역삼동 123',family:'부부+자녀2명',health:'이상 없음',special:'N',shelter:'역삼동 주민센터 대피소',room:'A동 101호',time:'2026-04-08 09:15'},
+  {id:2,nm:'김순이',rrn:'450823',tel:'010-9876-5432',addr:'강남구 삼성동 45',family:'독거노인',health:'고혈압·당뇨',special:'Y',shelter:'강남구민회관',room:'B동 205호',time:'2026-04-08 09:22'},
+  {id:3,nm:'이민준',rrn:'850312',tel:'010-3456-7890',addr:'강남구 대치동 788',family:'1인가구',health:'이상 없음',special:'N',shelter:'역삼초등학교 체육관',room:'1층 강당',time:'2026-04-08 09:30'},
+  {id:4,nm:'박지수',rrn:'920614',tel:'010-2222-3333',addr:'강남구 압구정동 12',family:'부부+영아1명',health:'이상 없음',special:'Y',shelter:'선릉역 대피 공간',room:'C구역 14번',time:'2026-04-08 09:35'},
+  {id:5,nm:'최영호',rrn:'690905',tel:'010-5555-6666',addr:'강남구 논현동 99',family:'부부',health:'심장질환(관찰 중)',special:'Y',shelter:'강남구민회관',room:'1층 의무실 인근',time:'2026-04-08 09:40'},
+];
+let resIdSeq=6;
+
+const pct=s=>Math.round(s.cur/s.cap*100);
+const getSt=s=>{const p=pct(s);return p>=80?'혼잡':p>=50?'보통':'여유';};
+const COL={혼잡:'#c8102e',보통:'#e67e22',여유:'#27ae60'};
+const SBC={혼잡:'sb-r',보통:'sb-y',여유:'sb-g'};
+
+function switchTab(tab,el){
+  document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('on'));
+  document.querySelectorAll('.an-item').forEach(a=>a.classList.remove('on'));
+  document.getElementById('tab-'+tab).classList.add('on');
+  el.classList.add('on');
+}
+
+function renderAll(){ renderMonitor(); renderCrowd(); renderManage(); renderResidents(); updateSum(); document.getElementById('monTime').textContent=new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',second:'2-digit'}); }
+
+function updateSum(){
+  const g=shelters.filter(s=>getSt(s)==='여유').length;
+  const y=shelters.filter(s=>getSt(s)==='보통').length;
+  const r=shelters.filter(s=>getSt(s)==='혼잡').length;
+  const tot=shelters.reduce((a,s)=>a+s.cur,0);
+  document.getElementById('cntG').textContent=g;
+  document.getElementById('cntY').textContent=y;
+  document.getElementById('cntR').textContent=r;
+  document.getElementById('cntTot').textContent=tot.toLocaleString()+'명';
+  document.getElementById('statTotal').textContent=residents.length+'명';
+  document.getElementById('statSpecial').textContent=residents.filter(r=>r.special==='Y').length+'명';
+}
+
+function renderMonitor(){
+  document.getElementById('monBody').innerHTML=shelters.map(s=>{
+    const p=pct(s),st=getSt(s),col=COL[st];
+    return`<tr><td style="color:var(--muted);font-size:14px">${s.id}</td><td style="font-weight:600">${s.name}</td><td style="font-size:14px;color:var(--muted)">${s.addr}</td><td style="font-size:14px">${s.type}</td><td>${s.cap.toLocaleString()}명</td><td style="font-weight:700;color:${col}">${s.cur.toLocaleString()}명</td><td><div class="mini-bar"><div class="mini-bg"><div class="mini-fill" style="width:${p}%;background:${col}"></div></div><span style="font-weight:700;font-size:14px;color:${col};width:38px">${p}%</span></div></td><td><span class="sb ${SBC[st]}">${st}</span></td><td style="font-size:14px;color:${s.op==='운영 중'?'#27ae60':s.op==='점검 중'?'#e67e22':'var(--red)'};font-weight:600">${s.op}</td><td style="font-size:14px">${s.mgr}</td><td><button class="btn-edit" onclick="openEdit(${s.id})">수정</button></td></tr>`;
+  }).join('');
+}
+
+function renderCrowd(){
+  const heavy=shelters.filter(s=>pct(s)>=50).sort((a,b)=>pct(b)-pct(a));
+  const rCnt=shelters.filter(s=>pct(s)>=80).length;
+  document.getElementById('crowdAlert').innerHTML=`현재 <strong style="color:var(--red)">${rCnt}개 대피소</strong>에서 혼잡(80% 이상) 상태가 확인되었습니다. 인근 여유 대피소로 분산 안내를 검토하세요.`;
+  document.getElementById('crowdGrid').innerHTML=heavy.slice(0,8).map(s=>{
+    const p=pct(s),st=getSt(s),col=COL[st];
+    return`<div class="crowd-card"><h4>${s.name}${p>=80?'<span class="flag-a">혼잡</span>':p>=60?'<span class="flag-w">주의</span>':''}</h4><div class="crowd-addr">📍 ${s.addr}</div><div class="gauge-row"><div class="gauge-bg"><div class="gauge-fill" style="width:${p}%;background:${col}"></div></div><span class="gauge-pct" style="color:${col}">${p}%</span></div><div style="font-size:13px;color:#aaa;display:flex;justify-content:space-between;"><span>${s.cur.toLocaleString()}명 / ${s.cap.toLocaleString()}명</span><span>${s.type}</span></div>${p>=75?`<button class="btn-scatter" onclick="alert('분산 안내 문자를 발송했습니다.')">분산 안내 발송</button>`:''}</div>`;
+  }).join('');
+  const sc=shelters.filter(s=>pct(s)>=75).sort((a,b)=>pct(b)-pct(a));
+  document.getElementById('scatterBody').innerHTML=sc.map(s=>{
+    const lt=shelters.filter(x=>pct(x)<50&&x.id!==s.id).sort((a,b)=>pct(a)-pct(b))[0];
+    if(!lt)return'';
+    return`<tr><td style="font-weight:600">${s.name}</td><td><span style="color:var(--red);font-weight:700">${pct(s)}%</span></td><td>${lt.name}</td><td><span style="color:#27ae60;font-weight:700">${pct(lt)}%</span></td><td>${(Math.random()*2+0.3).toFixed(1)}km</td><td><button class="btn-edit" onclick="alert('분산 안내 문자를 발송했습니다.')">분산 안내 발송</button></td></tr>`;
+  }).join('');
+}
+
+function renderManage(){
+  const q=(document.getElementById('manSrch')?.value||'').toLowerCase();
+  const sf=document.getElementById('manSt')?.value||'all';
+  const of=document.getElementById('manOp')?.value||'all';
+  let list=shelters;
+  if(q) list=list.filter(s=>s.name.toLowerCase().includes(q)||s.addr.toLowerCase().includes(q));
+  if(sf!=='all') list=list.filter(s=>getSt(s)===sf);
+  if(of!=='all') list=list.filter(s=>s.op===of);
+  document.getElementById('manBody').innerHTML=list.map(s=>{
+    const p=pct(s),st=getSt(s),col=COL[st];
+    return`<tr><td style="color:var(--muted);font-size:14px">${s.id}</td><td style="font-weight:600">${s.name}</td><td style="font-size:14px;color:var(--muted)">${s.addr}</td><td>${s.cap.toLocaleString()}명</td><td style="font-weight:700;color:${col}">${s.cur.toLocaleString()}명</td><td><span class="sb ${SBC[st]}">${p}%</span></td><td><span class="sb ${SBC[st]}">${st}</span></td><td style="font-weight:600;color:${s.op==='운영 중'?'#27ae60':s.op==='점검 중'?'#e67e22':'var(--red)'}">${s.op}</td><td style="font-size:14px">${s.mgr}</td><td style="font-size:14px">${s.tel}</td><td style="display:flex;gap:4px;flex-wrap:wrap;"><button class="btn-edit" onclick="openEdit(${s.id})">수정</button>${s.op==='운영 중'?`<button class="btn-stop" onclick="toggleOp(${s.id})">중단</button>`:`<button class="btn-open" onclick="toggleOp(${s.id})">재개</button>`}</td></tr>`;
+  }).join('')||`<tr><td colspan="11" style="text-align:center;padding:24px;color:#aaa;">검색 결과가 없습니다</td></tr>`;
+}
+
+function renderResidents(){
+  const q=(document.getElementById('resSrch')?.value||'').toLowerCase();
+  const sf=document.getElementById('resFilter')?.value||'all';
+  const sp=document.getElementById('resSpecial')?.value||'all';
+  let list=residents;
+  if(q) list=list.filter(r=>r.nm.includes(q)||r.shelter.includes(q));
+  if(sf!=='all') list=list.filter(r=>r.shelter===sf);
+  if(sp==='Y') list=list.filter(r=>r.special==='Y');
+  document.getElementById('resBody').innerHTML=list.map(r=>`
+    <tr>
+      <td style="color:var(--muted);font-size:14px">${r.id}</td>
+      <td style="font-weight:600">${r.nm}</td>
+      <td style="font-family:monospace;font-size:14px">${r.rrn}-*******</td>
+      <td>${r.tel}</td>
+      <td style="font-size:14px;color:var(--muted)">${r.addr}</td>
+      <td style="font-size:14px">${r.family}</td>
+      <td style="font-size:14px">${r.health!=='이상 없음'?`<span class="badge-health">${r.health}</span>`:r.health}</td>
+      <td>${r.special==='Y'?'<span class="badge-special">대상</span>':'-'}</td>
+      <td style="font-size:14px;font-weight:600;color:var(--navy)">${r.shelter}</td>
+      <td style="font-size:14px">${r.room}</td>
+      <td style="font-size:13px;color:var(--muted)">${r.time}</td>
+      <td style="display:flex;gap:4px;">
+        <button class="btn-edit" onclick="openResidentModal(${r.id})">수정</button>
+        <button class="btn-stop" onclick="delResident(${r.id})">삭제</button>
+      </td>
+    </tr>`).join('')||`<tr><td colspan="12" style="text-align:center;padding:24px;color:#aaa;">입소자 정보가 없습니다</td></tr>`;
+}
+
+/* 입소자 모달 */
+let editResId=null;
+function openResidentModal(id){
+  editResId=id;
+  const r=id?residents.find(x=>x.id===id):null;
+  document.getElementById('resModalTitle').textContent=r?'입소자 정보 수정':'입소자 정보 입력';
+  document.getElementById('rNm').value=r?.nm||'';
+  document.getElementById('rRrn').value=r?.rrn||'';
+  document.getElementById('rTel').value=r?.tel||'';
+  document.getElementById('rAddr').value=r?.addr||'';
+  document.getElementById('rFamily').value=r?.family||'';
+  document.getElementById('rHealth').value=r?.health||'';
+  document.getElementById('rSpecial').value=r?.special||'N';
+  document.getElementById('rShelter').value=r?.shelter||shelters[0].name;
+  document.getElementById('rRoom').value=r?.room||'';
+  document.getElementById('rNote').value='';
+  document.getElementById('resModal').classList.add('open');
+}
+function saveResident(){
+  const nm=document.getElementById('rNm').value.trim();
+  if(!nm){alert('성명을 입력하세요.');return;}
+  const data={nm,rrn:document.getElementById('rRrn').value,tel:document.getElementById('rTel').value,addr:document.getElementById('rAddr').value,family:document.getElementById('rFamily').value,health:document.getElementById('rHealth').value||'이상 없음',special:document.getElementById('rSpecial').value.startsWith('Y')?'Y':'N',shelter:document.getElementById('rShelter').value,room:document.getElementById('rRoom').value,time:new Date().toLocaleString('ko-KR').replace(/\./g,'-').replace(/ /g,' ').slice(0,16)};
+  if(editResId){
+    Object.assign(residents.find(r=>r.id===editResId),data);
+    addAuditLog('입소자수정', data.shelter, `${nm} 입소자 정보 수정`);
+  } else {
+    data.id=resIdSeq++;residents.push(data);
+    // API 연결: postEvacuationEntry({ shelterId, name: nm, phoneNumber: data.tel, ... });
+    addAuditLog('입소등록', data.shelter, `${nm} 입소 등록 (배정구역: ${data.room||'-'})`);
+  }
+  document.getElementById('resModal').classList.remove('open');
+  renderResidents(); updateSum(); alert('저장되었습니다.');
+}
+function delResident(id){
+  if(confirm('입소자 정보를 삭제하시겠습니까?')){
+    const r=residents.find(x=>x.id===id);
+    if(r) addAuditLog('입소자삭제', r.shelter, `${r.nm} 입소자 정보 삭제`);
+    residents=residents.filter(r=>r.id!==id);
+    renderResidents();updateSum();
+  }
+}
+
+/* 대량 입력 파싱 */
+function parseBulk(){
+  const raw=document.getElementById('bulkInput').value.trim();
+  if(!raw){alert('데이터를 입력하세요.');return;}
+  const lines=raw.split('\n').filter(l=>l.trim()&&!l.startsWith('성명'));
+  let added=0;
+  lines.forEach(line=>{
+    const cols=line.split(/[,\t]/);
+    if(cols.length<3)return;
+    residents.push({id:resIdSeq++,nm:cols[0]?.trim()||'',rrn:cols[1]?.trim()||'',tel:cols[2]?.trim()||'',addr:cols[3]?.trim()||'',family:cols[4]?.trim()||'',health:cols[5]?.trim()||'이상 없음',special:cols[6]?.trim()==='해당없음'||cols[6]?.trim()===''?'N':'Y',shelter:cols[7]?.trim()||shelters[0].name,room:cols[8]?.trim()||'',time:new Date().toLocaleString('ko-KR').slice(0,16)});
+    added++;
+  });
+  document.getElementById('bulkInput').value='';
+  renderResidents(); updateSum();
+  alert(`${added}명의 입소자 정보가 추가되었습니다.`);
+}
+
+/* CSV 내보내기 */
+function exportCSV(){
+  const header='성명,주민번호앞6,연락처,주소,가족구성,건강상태,특별보호,입소시설,배정구역,입소일시\n';
+  const rows=residents.map(r=>`${r.nm},${r.rrn},${r.tel},${r.addr},${r.family},${r.health},${r.special==='Y'?'대상':'해당없음'},${r.shelter},${r.room},${r.time}`).join('\n');
+  const blob=new Blob(['\uFEFF'+header+rows],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download='입소자목록_'+new Date().toLocaleDateString('ko-KR').replace(/\./g,'').trim()+'.csv';a.click();
+}
+
+/* 대피소 수정 */
+let editId=null;
+function openEdit(id){
+  editId=id; const s=shelters.find(x=>x.id===id);
+  document.getElementById('eNm').value=s.name;document.getElementById('eAddr').value=s.addr;document.getElementById('eCap').value=s.cap;document.getElementById('eType').value=s.type;document.getElementById('eOp').value=s.op;document.getElementById('eMgr').value=s.mgr;document.getElementById('eTel').value=s.tel;document.getElementById('eNote').value='';document.getElementById('eReason').value='';
+  document.getElementById('editModal').classList.add('open');
+}
+function saveEdit(){
+  const s=shelters.find(x=>x.id===editId);
+  const prevCap=s.cap;
+  // reason 필수 검증 (명세서 v6: PATCH /admin/shelters reason 필수)
+  const reason=document.getElementById('eReason').value.trim();
+  if(!reason){alert('수정 사유를 입력하세요. (필수)');return;}
+  s.name=document.getElementById('eNm').value;s.addr=document.getElementById('eAddr').value;s.cap=parseInt(document.getElementById('eCap').value)||s.cap;s.type=document.getElementById('eType').value;s.op=document.getElementById('eOp').value;s.mgr=document.getElementById('eMgr').value;s.tel=document.getElementById('eTel').value;
+  // API 연결 (Java + Spring): PATCH /api/admin/shelters/{shelterId}
+  // patchShelterCapacity(editId, s.cap, reason);
+  // 이력 기록
+  if(prevCap !== s.cap){
+    addAuditLog('수용인원수정', s.name, `수용 가능 인원 ${prevCap}→${s.cap}명으로 변경 (사유: ${reason})`);
+  } else {
+    addAuditLog('정보수정', s.name, `대피소 정보 수정 완료 (사유: ${reason})`);
+  }
+  document.getElementById('editModal').classList.remove('open');renderAll();alert('저장되었습니다.');
+}
+function toggleOp(id){const s=shelters.find(x=>x.id===id);const n=s.op==='운영 중'?'운영 중단':'운영 중';if(confirm(`"${s.name}"을(를) "${n}"으로 변경하시겠습니까?`)){s.op=n;renderAll();}}
+
+/* =============================================
+   관리자 API 연결 (Java + Spring Boot)
+   ============================================= */
+
+/* GET /api/admin/dashboard */
+async function fetchAdminDashboard(){
+  const data = await apiGet('/admin/dashboard');
+  return data; // { summary: {...}, shelters: [...] }
+}
+
+/* GET /api/admin/evacuation-entries?shelterId={id}&status=ENTERED */
+async function fetchEvacuationEntries(shelterId, status='ENTERED'){
+  const data = await apiGet('/admin/evacuation-entries?shelterId='+shelterId+'&status='+status);
+  return data ? data.items : null;
+}
+
+/* POST /api/admin/evacuation-entries - 입소 등록 */
+async function postEvacuationEntry(body){
+  // body: { shelterId, name, phoneNumber, address, familyInfo, healthStatus, specialProtectionFlag, assignedZone }
+  return await apiPost('/admin/evacuation-entries', body);
+}
+
+/* POST /api/admin/evacuation-entries/{id}/exit - 퇴소 처리 */
+async function postEvacuationExit(entryId, reason=''){
+  return await apiPost('/admin/evacuation-entries/'+entryId+'/exit', {reason});
+}
+
+/* PATCH /api/admin/shelters/{id} - 수용 최대 인원 수정 */
+async function patchShelterCapacity(shelterId, capacityTotal, reason='관리자 수정'){
+  return await apiPatch('/admin/shelters/'+shelterId, {capacityTotal, reason});
+}
+
+
+/* =============================================
+   이력 관리 (수용인원 수정 / 입소자 명단 이력)
+   ============================================= */
+let auditLogs = [];
+
+function addAuditLog(type, shelter, content){
+  const u=getUser(); const admin = u?u.name:'admin';
+  const now = new Date();
+  const time = now.toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+  const typeClass = type.includes('수정') || type.includes('삭제') ? 'lt-warn' :
+                    type.includes('등록') ? 'lt-ok' : 'lt-warn';
+  auditLogs.unshift({time, type, typeClass, shelter, content, admin});
+  renderAuditLog();
+}
+
+function renderAuditLog(){
+  const tbody = document.getElementById('logBody');
+  if(!tbody) return;
+  const newRows = auditLogs.map(l =>
+    `<tr style="background:#fffbe6;">
+      <td>${l.time}</td>
+      <td class="${l.typeClass}">${l.type}</td>
+      <td>${l.shelter}</td>
+      <td>${l.content}</td>
+      <td>${l.admin}</td>
+    </tr>`
+  ).join('');
+  // 기존 더미 행들 앞에 신규 이력 삽입
+  const existingRows = tbody.innerHTML;
+  tbody.innerHTML = newRows + existingRows;
+}
+
+
+/* =============================================
+   SafeSpot 공통 인증/세션 모듈 (명세서 v6 기준)
+   Base URL: /api (개발) | https://api.safespot.kr (운영)
+   인증: Access Token only (Refresh Token 없음)
+   ============================================= */
+const API_BASE = '/api';
+
+/* 세션 저장 형식 (전 페이지 통일)
+   sessionStorage.setItem('accessToken', string)
+   sessionStorage.setItem('user', JSON.stringify({ userId, role, name }))
+   role: 'USER' | 'ADMIN'
+*/
+function getToken(){ return sessionStorage.getItem('accessToken')||''; }
+function getUser(){
+  try{ return JSON.parse(sessionStorage.getItem('user')||'null'); }
+  catch(e){ return null; }
+}
+function isLoggedIn(){ return !!getToken() && !!getUser(); }
+function isAdmin(){ const u=getUser(); return u&&u.role==='ADMIN'; }
+
+/* 보호 페이지 진입 가드 */
+function requireLogin(redirectUrl){
+  if(!isLoggedIn()){
+    alert('로그인이 필요합니다.');
+    window.location.href = redirectUrl||'login.html';
+    return false;
+  }
+  return true;
+}
+function requireAdmin(){
+  if(!isLoggedIn()||!isAdmin()){
+    alert('관리자 권한이 필요합니다.');
+    window.location.href='login.html';
+    return false;
+  }
+  return true;
+}
+
+/* 공통 fetch 래퍼 - 401 만료 처리 포함 */
+async function apiGet(path){
+  try{
+    const res=await fetch(API_BASE+path,{headers:{'Authorization':'Bearer '+getToken()}});
+    if(res.status===401){ alert('세션이 만료되었습니다. 다시 로그인해주세요.'); doLogout(); return null; }
+    if(!res.ok) throw new Error(res.status);
+    const json=await res.json(); return json.data;
+  }catch(e){ console.warn('[API] GET '+path+' 실패:',e.message,'→ 목 데이터 사용'); return null; }
+}
+async function apiPost(path,body){
+  try{
+    const res=await fetch(API_BASE+path,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+getToken()},body:JSON.stringify(body)});
+    if(res.status===401){ alert('세션이 만료되었습니다. 다시 로그인해주세요.'); doLogout(); return null; }
+    if(!res.ok) throw new Error(res.status);
+    return await res.json();
+  }catch(e){ console.warn('[API] POST '+path+' 실패:',e.message); return null; }
+}
+async function apiPatch(path,body){
+  try{
+    const res=await fetch(API_BASE+path,{method:'PATCH',headers:{'Content-Type':'application/json','Authorization':'Bearer '+getToken()},body:JSON.stringify(body)});
+    if(res.status===401){ alert('세션이 만료되었습니다. 다시 로그인해주세요.'); doLogout(); return null; }
+    if(!res.ok) throw new Error(res.status);
+    return await res.json();
+  }catch(e){ console.warn('[API] PATCH '+path+' 실패:',e.message); return null; }
+}
+
+</script>
+</body>
+</html>
