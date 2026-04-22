@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>가족 찾기 - 국민재난대피포털</title>
+<link rel="stylesheet" href="_common.css">
+<link rel="preconnect" href="https://dapi.kakao.com">
+<link rel="preconnect" href="https://map.daumcdn.net">
+<link rel="preconnect" href="https://t1.daumcdn.net">
+<link rel="dns-prefetch" href="//map2.daumcdn.net">
+<link rel="dns-prefetch" href="//map3.daumcdn.net">
+<script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=cdeea7fcffbfbc4a892fd5754e170dd3&autoload=false"></script>
+<style>
+/* 내 체크인 상태 바 */
+.my-bar{background:#f0f4f8;color:var(--navy);padding:14px 0;border-bottom:1px solid #d4dae8;}
+.my-bar-inner{max-width:1440px;margin:0 auto;padding:0 28px;display:flex;align-items:center;gap:16px;}
+.my-avatar{width:46px;height:46px;border-radius:50%;background:var(--red);color:#fff;font-size:18px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.my-info strong{font-size:17px;color:var(--navy);display:block;}
+.my-info span{font-size:14px;color:#5a6474;}
+.my-info .loc{color:#1a5276;font-weight:600;}
+.btn-checkout{margin-left:auto;background:#fff;color:var(--navy);border:1px solid #b0bcd4;padding:8px 18px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;}
+.btn-checkout:hover{background:#e8edf5;}
+
+/* 안내 박스 */
+.info-box{background:#e8f0fb;border:1px solid #b8ceee;padding:13px 16px;font-size:15px;color:#1a3a6c;display:flex;gap:10px;margin-bottom:20px;line-height:1.7;box-sizing:border-box;}
+
+/* 2열 레이아웃: 친구추가 패널 + 지도 */
+.family-layout{display:grid;grid-template-columns:420px 1fr;gap:18px;align-items:start;}
+
+/* 친구 추가/요청 패널 */
+.side-panel{display:flex;flex-direction:column;gap:14px;}
+
+.panel-card{background:#fff;border:1px solid var(--border);border-top:3px solid var(--navy);}
+.panel-card.red-top{border-top-color:var(--red);}
+.panel-head{padding:12px 16px;border-bottom:1px solid var(--border);font-size:16px;font-weight:700;color:var(--navy);display:flex;align-items:center;justify-content:space-between;}
+.panel-head.red{color:var(--red);}
+.panel-body{padding:16px;}
+
+.add-row{display:flex;gap:8px;margin-bottom:6px;}
+.add-row input{flex:1;border:1px solid #ccc;padding:10px 12px;font-size:15px;font-family:inherit;outline:none;}
+.add-row input:focus{border-color:var(--navy);}
+.add-row button{background:var(--navy);color:#fff;border:none;padding:10px 16px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;}
+.add-row button:hover{background:#2a4a80;}
+.add-hint{font-size:13px;color:#aaa;}
+
+.req-item{display:flex;align-items:center;gap:10px;padding:10px 12px;background:#fff8e8;border:1px solid #ffe4a0;margin-bottom:8px;}
+.req-item:last-child{margin-bottom:0;}
+.req-av{width:34px;height:34px;border-radius:50%;background:#e67e22;color:#fff;font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.req-name{flex:1;font-size:15px;font-weight:600;}
+.req-phone{font-size:13px;color:#888;}
+.btn-accept{background:var(--navy);color:#fff;border:none;padding:5px 13px;font-size:13px;cursor:pointer;font-family:inherit;}
+.btn-reject{background:#fff;color:#888;border:1px solid #ccc;padding:5px 11px;font-size:13px;cursor:pointer;font-family:inherit;margin-left:4px;}
+
+/* 지도 */
+#familyMap{height:510px;border:1px solid var(--border);border-bottom:none;}
+.map-legend-bar{background:#fff;border:1px solid var(--border);border-top:none;padding:10px 16px;display:flex;gap:20px;font-size:14px;flex-wrap:wrap;align-items:center;}
+.leg-dot{width:13px;height:13px;border-radius:50%;display:inline-block;margin-right:4px;}
+
+/* 친구 목록 — 전체 너비 테이블형 */
+.friend-table-wrap{background:#fff;border:1px solid var(--border);border-top:3px solid var(--navy);margin-top:14px;}
+.friend-table-head{padding:12px 18px;border-bottom:1px solid var(--border);font-size:16px;font-weight:700;color:var(--navy);display:flex;align-items:center;justify-content:space-between;}
+.friend-table{width:100%;border-collapse:collapse;}
+.friend-table thead tr{background:var(--navy);color:#fff;}
+.friend-table thead th{padding:12px 16px;font-size:14px;font-weight:600;text-align:left;white-space:nowrap;}
+.friend-table tbody tr{border-bottom:1px solid #f0f4fa;cursor:pointer;transition:background .1s;}
+.friend-table tbody tr:hover{background:#eef2fb;}
+.friend-table tbody td{padding:11px 14px;font-size:14px;white-space:nowrap;}
+.f-av{width:40px;height:40px;border-radius:50%;color:#fff;font-size:16px;font-weight:700;display:flex;align-items:center;justify-content:center;position:relative;flex-shrink:0;}
+.f-online{position:absolute;bottom:1px;right:1px;width:11px;height:11px;border-radius:50%;background:#27ae60;border:2px solid #fff;}
+.relation-badge{display:inline-block;background:#eef2fb;color:var(--navy);font-size:12px;font-weight:700;padding:2px 9px;border:1px solid #c8d4ee;margin-left:6px;}
+.status-chip{font-size:13px;font-weight:700;padding:4px 12px;border:1px solid;}
+.sc-in{color:var(--navy);border-color:var(--navy);background:#eef2fb;}
+.sc-out{color:#888;border-color:#ccc;background:#f5f5f5;}
+.sc-sos{color:var(--red);border-color:var(--red);background:#fff0f0;animation:blink 1s step-start infinite;}
+@keyframes blink{50%{opacity:.4}}
+.btn-map-go{background:var(--navy);color:#fff;border:none;padding:5px 14px;font-size:13px;cursor:pointer;font-family:inherit;}
+
+/* 친구 상세 모달 */
+.d-row{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #f5f5f5;font-size:15px;}
+.d-row:last-child{border-bottom:none;}
+.dk{color:#888;}
+.dv{font-weight:600;}
+
+@media(max-width:1100px){.family-layout{grid-template-columns:1fr;}}
+
+
+/* ================================================
+   모바일 반응형 — 행안부 스타일 기준
+   768px 이하 모바일 | PC 레이아웃 그대로 유지
+   ================================================ */
+@media (max-width: 768px) {
+
+  /* 정부 최상단 바 축소 */
+  .govbar { height: 30px; }
+  .govbar-left { font-size: 12px; gap: 5px; }
+  .govbar-right { display: none; }
+  .govbar-inner { padding: 0 14px; }
+
+    /* 헤더 — 모바일: 돋보기 버튼 방식 */
+  .header-inner {
+    padding: 0 14px;
+    height: 52px;
+    flex-wrap: nowrap;
+    gap: 8px;
+    align-items: center;
+  }
+  .h-logo { min-width: 0; gap: 8px; flex: 1; }
+  .h-logo-mark { width: 34px; height: 34px; flex-shrink: 0; }
+  .h-logo-mark svg { width: 22px; height: 22px; }
+  .h-logo-texts strong { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px; }
+  .h-logo-texts span { display: none; }
+  .h-userinfo { flex-shrink: 0; display: flex; align-items: center; gap: 4px; margin-left: auto; }
+  .h-username { font-size: 12px; }
+  .btn-join, .btn-logout { font-size: 12px; padding: 5px 9px; border-radius: 4px; }
+
+
+  /* 네비게이션 — 2줄 3개씩 배치 */
+  .main-nav { height: auto; border-bottom: 3px solid var(--red); }
+  .main-nav-inner {
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    height: auto;
+    gap: 0;
+  }
+  .nav-item {
+    flex: none;
+    height: 44px;
+    font-size: 13px;
+    font-weight: 700;
+    border-right: 1px solid rgba(255,255,255,.12);
+    border-bottom: 1px solid rgba(255,255,255,.08);
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+  }
+  .nav-item:nth-child(3) { border-right: none; }
+  .nav-item:nth-child(4),
+  .nav-item:nth-child(5),
+  .nav-item:nth-child(6) { border-bottom: none; }
+  .nav-item:nth-child(6) { border-right: none; }
+
+  /* 긴급 재난 띠 */
+  .emg-strip .wrap { font-size: 12px; padding: 0 14px; gap: 8px; }
+  .emg-tag { font-size: 11px; padding: 2px 7px; white-space: nowrap; }
+
+  /* 페이지 히어로 */
+  .page-hero { padding: 18px 0; }
+  .page-hero-inner { padding: 0 14px; flex-direction: column; gap: 6px; }
+  .page-hero h1 { font-size: 20px; }
+  .page-hero p { font-size: 13px; }
+
+  /* 경로 바 */
+  .ptbar { padding: 8px 14px; }
+  .ptbar-inner { font-size: 12px; }
+
+  /* wrap */
+  .wrap { padding: 0 14px; }
+
+  /* 섹션 타이틀 */
+  .sec-ttl { font-size: 16px; padding: 14px 0 10px; }
+
+  /* 푸터 */
+  footer { padding: 16px 0; }
+  footer .wrap { flex-direction: column; gap: 6px; text-align: center; font-size: 12px; }
+  .ft-links { flex-wrap: wrap; justify-content: center; gap: 8px; }
+  .ft-links a { font-size: 12px; }
+
+  /* 공통 모달 */
+  .modal-bg .modal { width: 96vw !important; max-height: 90vh; overflow-y: auto; }
+  .modal-form { grid-template-columns: 1fr !important; }
+}
+
+@media (max-width: 768px) {
+  .family-layout { grid-template-columns: 1fr !important; gap: 0; }
+
+  .my-bar-inner { padding: 10px 14px; flex-wrap: wrap; gap: 8px; }
+  .my-avatar { width: 40px; height: 40px; font-size: 16px; }
+  .my-info strong { font-size: 15px; }
+  .my-info span { font-size: 12px; }
+  .btn-checkout { margin-left: auto; font-size: 13px; padding: 7px 14px; border-radius: 5px; }
+
+  .info-box { font-size: 13px; padding: 10px 14px; margin: 10px 14px; border-radius: 6px; }
+
+  .family-left, .family-right { padding: 0 14px; }
+  .friend-search-row { display: flex; gap: 8px; margin-bottom: 12px; }
+  .friend-search-row input { flex: 1; font-size: 14px; padding: 10px 12px; border-radius: 6px; }
+  .friend-search-row button { font-size: 14px; padding: 10px 16px; border-radius: 6px; }
+
+  .friend-item { padding: 12px 14px; border-radius: 8px; margin-bottom: 8px; }
+  .f-avatar { width: 38px; height: 38px; font-size: 16px; }
+  .f-name { font-size: 15px; }
+  .f-loc { font-size: 12px; }
+
+  #familyMap { height: 260px !important; border-radius: 8px; }
+}
+
+</style>
+</head>
+<body>
+
+
+<!-- 정부 최상단 바 -->
+<div class="govbar">
+  <div class="govbar-inner">
+    <div class="govbar-left"><span class="taeguk"></span>이 누리집은 대한민국 공식 전자정부 누리집입니다.</div>
+    <div class="govbar-right"><a href="#">ENGLISH</a><span>|</span><a href="#">어린이</a><span>|</span><a href="#">사이트맵</a><span>|</span><a href="#">안내도우미</a></div>
+  </div>
+</div>
+
+<!-- 헤더 -->
+<header>
+  <div class="header-inner">
+    <a href="index.html" class="h-logo">
+      <div class="h-logo-mark"><svg viewBox="0 0 34 34" fill="none"><circle cx="17" cy="17" r="16" fill="#1d3461" stroke="#4a6fa5" stroke-width="1"/><path d="M17 5 A12 12 0 0 1 29 17 A12 12 0 0 0 17 5Z" fill="#c8102e" opacity=".85"/><path d="M17 29 A12 12 0 0 1 5 17 A12 12 0 0 0 17 29Z" fill="#c8102e" opacity=".85"/><circle cx="17" cy="17" r="4" fill="#fff"/></svg></div>
+      <div class="h-logo-texts"><strong>국민재난대피포털</strong><span>국민 재난 대피 안전 서비스</span></div>
+    </a>
+    <div class="h-userinfo" id="hdrUtil"></div>
+  </div>
+</header>
+
+<!-- 주메뉴 -->
+<nav class="main-nav">
+  <div class="main-nav-inner">
+    <a class="nav-item" href="dashboard.html">재난현황</a>
+    <a class="nav-item" href="shelter.html">대피소 찾기</a>
+    <a class="nav-item" href="alerts.html">재난문자</a>
+    <a class="nav-item on" href="family.html">가족 찾기</a>
+    <a class="nav-item" href="checklist.html">재난 대비</a>
+    <a class="nav-item" href="guide.html">국민행동요령</a>
+  </div>
+</nav>
+
+<!-- 긴급재난문자 띠 -->
+<div class="emg-strip" id="emgStrip">
+  <div class="wrap">
+    <span class="emg-tag">긴급재난문자</span>
+    <span><strong>[호우경보]</strong> 서울 강남·서초·송파구 호우경보 발효 — 지하 공간 이용 자제, 저지대 주민 즉시 대피 요망 (2026-04-09 09:32)</span>
+    <button class="emg-x" onclick="this.parentElement.parentElement.style.display='none'">✕</button>
+  </div>
+</div>
+
+<!-- 페이지 타이틀 바 -->
+<div class="ptbar">
+  <div class="ptbar-inner"><a href="index.html">홈</a> &gt; <span class="curr">가족 찾기</span></div>
+</div>
+
+<!-- 페이지 히어로 -->
+<div class="page-hero">
+  <div class="page-hero-inner">
+    <div>
+      <h1>가족 찾기</h1>
+      <p>가족·지인의 대피소 체크인 위치를 실시간으로 확인하고 안전을 확인하세요.</p>
+    </div>
+    <div class="page-hero-meta">
+      <span>👥 4명 연결됨</span>
+      <span>🟢 3명 체크인</span>
+    </div>
+  </div>
+</div>
+
+<!-- 내 체크인 상태 바 -->
+<div class="my-bar">
+  <div class="my-bar-inner">
+    <div class="my-avatar" id="myAvatar">김</div>
+    <div class="my-info">
+      <strong id="myName">김안전 (나)</strong>
+      <span>현재 위치: <span class="loc">역삼동 주민센터 대피소</span> · 2026-04-09 09:45</span>
+    </div>
+  </div>
+</div>
+
+<div class="wrap" style="padding-top:22px;padding-bottom:40px;">
+
+  <!-- 안내 박스 -->
+  <div class="info-box">
+    <span style="font-size:18px;flex-shrink:0;">ℹ️</span>
+    <div>가족 찾기는 <strong>상호 친구 추가가 완료된 회원</strong>에 한해, 상대방이 체크인한 대피소 위치를 실시간으로 확인할 수 있는 서비스입니다. 전화번호로 친구를 추가하고 상대방이 수락하면 서비스가 활성화됩니다.</div>
+  </div>
+
+  <div class="family-layout">
+    <!-- 좌측: 친구 추가 + 요청 -->
+    <div class="side-panel">
+
+      <!-- 친구 추가 -->
+      <div class="panel-card">
+        <div class="panel-head">친구 추가</div>
+        <div class="panel-body">
+          <div class="add-row">
+            <input type="tel" id="addPhone" placeholder="전화번호 (010-0000-0000)">
+            <button onclick="sendReq()">추가 요청</button>
+          </div>
+          <div class="add-hint">※ 국민재난대피포털 가입 전화번호만 추가 가능합니다.</div>
+        </div>
+      </div>
+
+      <!-- 대기 중인 요청 -->
+      <div class="panel-card red-top">
+        <div class="panel-head red">친구 요청 대기 <span style="font-size:14px;font-weight:400;color:#888">2건</span></div>
+        <div class="panel-body">
+          <div class="req-item">
+            <div class="req-av">이</div>
+            <div><div class="req-name">이민준</div><div class="req-phone">010-3456-7890</div></div>
+            <button class="btn-accept" onclick="acceptReq(this,'이민준')">수락</button>
+            <button class="btn-reject" onclick="this.closest('.req-item').remove()">거절</button>
+          </div>
+          <div class="req-item">
+            <div class="req-av" style="background:#8e44ad;">박</div>
+            <div><div class="req-name">박지수</div><div class="req-phone">010-9012-3456</div></div>
+            <button class="btn-accept" onclick="acceptReq(this,'박지수')">수락</button>
+            <button class="btn-reject" onclick="this.closest('.req-item').remove()">거절</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 우측: 지도 (상단) + 친구 목록 (하단) -->
+    <div>
+      <!-- 위치 지도 -->
+      <div class="panel-card" style="overflow:hidden;margin-bottom:14px;">
+        <div class="panel-head">위치 지도</div>
+        <div id="familyMap"></div>
+        <div class="map-legend-bar" style="flex-wrap:wrap;gap:10px;">
+          <span><span class="leg-dot" style="background:var(--navy);"></span>나</span>
+          <span><span class="leg-dot" style="background:var(--red);"></span>어머니</span>
+          <span><span class="leg-dot" style="background:#2563a8;"></span>아버지</span>
+          <span><span class="leg-dot" style="background:#27ae60;"></span>배우자</span>
+          <span><span class="leg-dot" style="background:#aaa;"></span>미체크인</span>
+        </div>
+      </div>
+
+      <!-- 친구 목록 테이블 -->
+      <div class="friend-table-wrap">
+        <div class="friend-table-head">
+          친구 목록
+          <span style="font-size:15px;font-weight:400;color:#888;">4명 연결됨</span>
+        </div>
+        <table class="friend-table">
+          <thead>
+            <tr>
+              <th>프로필</th>
+              <th>이름</th>
+              <th>현재 상태</th>
+              <th>대피소</th>
+              <th>체크인 시각</th>
+              <th>연락처</th>
+              <th>지도</th>
+              <th>관리</th>
+            </tr>
+          </thead>
+          <tbody id="friendBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 로그인 모달 -->
+<div class="login-modal-bg" id="loginModalBg" onclick="if(event.target===this)closeLoginModal()">
+  <div class="login-modal">
+    <div class="lc-top">
+      <h2>로그인</h2>
+      <button class="login-modal-close" onclick="closeLoginModal()">✕</button>
+    </div>
+    <div class="lc-switch-wrap">
+      <div class="lc-methods" id="modalMethods">
+        <div class="lc-method" onclick="alert('공동인증서(구 공인인증서) 및 금융인증서로 로그인합니다.\n(데모: 아이디 로그인을 이용해주세요)')">
+          <div class="lc-icon-box icon-cert"></div>
+          <span class="lc-method-name">공동·금융인증</span>
+        </div>
+        <div class="lc-method" onclick="alert('카카오·네이버·PASS 간편인증으로 로그인합니다.\n(데모: 아이디 로그인을 이용해주세요)')">
+          <div class="lc-icon-box icon-simple"></div>
+          <span class="lc-method-name">간편인증</span>
+        </div>
+        <div class="lc-method" onclick="showIdLoginModal()">
+          <div class="lc-icon-box icon-id"></div>
+          <span class="lc-method-name">아이디 로그인</span>
+        </div>
+      </div>
+      <div class="lc-id-form" id="modalIdForm">
+        <button class="btn-back-login" onclick="backToMethodsModal()">← 다른 방법으로 로그인</button>
+        <div class="lf-err" id="modalErr">아이디 또는 비밀번호가 올바르지 않습니다.</div>
+        <div class="lf-row"><input type="text" id="modalId" placeholder="아이디" onkeydown="if(event.key==='Enter')doModalLogin()"></div>
+        <div class="lf-row"><input type="password" id="modalPw" placeholder="비밀번호" onkeydown="if(event.key==='Enter')doModalLogin()"></div>
+        <button class="btn-lc-do" onclick="doModalLogin()">로그인</button>
+        <div class="lc-id-links"><a href="#">아이디 찾기</a><a href="#">비밀번호 찾기</a></div>
+      </div>
+    </div>
+    <button class="btn-other-login" onclick="alert('공동인증서·카카오·네이버 간편인증 등 다양한 로그인을 지원합니다.')">다른 로그인 안내</button>
+  </div>
+</div>
+
+<!-- 로그인 필요 오버레이 -->
+<div id="loginRequired" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1500;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-top:4px solid var(--navy);padding:36px 40px;text-align:center;max-width:400px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,.2);">
+    <div style="font-size:44px;margin-bottom:16px;">🔒</div>
+    <h2 style="font-size:20px;font-weight:900;color:var(--navy);margin-bottom:10px;">로그인이 필요한 서비스입니다</h2>
+    <p style="font-size:14px;color:#666;line-height:1.7;margin-bottom:24px;">가족 찾기 서비스는 회원 로그인 후<br>이용하실 수 있습니다.</p>
+    <div style="display:flex;gap:10px;justify-content:center;">
+      <button onclick="history.back()" style="background:#fff;color:var(--navy);border:2px solid var(--navy);padding:10px 22px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit;">이전 페이지</button>
+      <button onclick="document.getElementById('loginRequired').style.display='none';openLoginModal()" style="background:var(--navy);color:#fff;border:none;padding:10px 22px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;">로그인</button>
+    </div>
+  </div>
+</div>
+
+<!-- 친구 상세 모달 -->
+<div class="modal-bg" id="friendModal" onclick="if(event.target===this)this.classList.remove('open')">
+  <div class="modal" style="width:460px;">
+    <div class="modal-head"><h3 id="fTitle">친구 상세 정보</h3><button class="modal-close" onclick="document.getElementById('friendModal').classList.remove('open')">✕</button></div>
+    <div class="modal-body" id="fBody"></div>
+    <div class="modal-foot"><button class="btn-primary" onclick="document.getElementById('friendModal').classList.remove('open')">닫기</button></div>
+  </div>
+</div>
+
+<script>
+// [더미] 친구 목록 — 백엔드 연결 시 GET /api/friends 응답으로 교체 (MVP 외 기능)
+const friends=[
+  {nm:'김영희',rel:'어머니',phone:'010-1234-5678',shelter:'강남구민회관',addr:'서울 강남구 삼성동 142',time:'09:22',status:'대피소',lat:37.5087,lng:127.0583,color:'#c8102e'},
+  {nm:'김철수',rel:'아버지',phone:'010-2345-6789',shelter:'역삼동 주민센터 대피소',addr:'서울 강남구 역삼동 736',time:'09:18',status:'대피소',lat:37.5004,lng:127.0366,color:'#2563a8'},
+  {nm:'최수진',rel:'배우자',phone:'010-3456-7890',shelter:'역삼동 주민센터 대피소',addr:'서울 강남구 역삼동 736',time:'09:40',status:'대피소',lat:37.5014,lng:127.0376,color:'#27ae60'},
+  {nm:'정우성',rel:'친구',phone:'010-4567-8901',shelter:'-',addr:'-',time:'-',status:'미체크인',lat:null,lng:null,color:'#aaa'},
+];
+
+let map;
+kakao.maps.load(function(){
+  map=new kakao.maps.Map(document.getElementById('familyMap'),{
+    center:new kakao.maps.LatLng(37.502,127.047),
+    level:5
+  });
+
+  // 내 위치 마커
+  new kakao.maps.CustomOverlay({
+    map,
+    position:new kakao.maps.LatLng(37.5004,127.0366),
+    content:`<div style="background:#1d3461;width:26px;height:26px;border-radius:50%;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:700;cursor:pointer;" title="나 (김안전) — 역삼동 주민센터 대피소" /* [더미] 실제 로그인 사용자 체크인 위치로 교체 */>나</div>`,
+    yAnchor:0.5,xAnchor:0.5
+  });
+
+  // 친구 마커
+  friends.forEach(f=>{
+    if(!f.lat)return;
+    new kakao.maps.CustomOverlay({
+      map,
+      position:new kakao.maps.LatLng(f.lat,f.lng),
+      content:`<div style="background:${f.color};width:24px;height:24px;border-radius:50%;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.25);display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:700;cursor:pointer;" title="${f.nm} (${f.rel}) — ${f.shelter}">${f.nm[0]}</div>`,
+      yAnchor:0.5,xAnchor:0.5
+    });
+  });
+});
+
+function renderFriends(){
+  const scMap={'대피소':'sc-in','미체크인':'sc-out','SOS':'sc-sos'};
+  document.getElementById('friendBody').innerHTML=friends.map((f,i)=>`
+    <tr onclick="showDetail(${i})">
+      <td><div class="f-av" style="background:${f.color}">${f.nm[0]}${f.status==='대피소'?'<div class="f-online"></div>':''}</div></td>
+      <td style="font-weight:700;font-size:16px;">${f.nm}</td>
+      <td><span class="status-chip ${scMap[f.status]||'sc-out'}">${f.status}</span></td>
+      <td style="font-weight:600;color:${f.status==='대피소'?'var(--navy)':'#aaa'}">${f.shelter}</td>
+      <td style="color:#888;font-size:14px;">${f.time!=='-'?'2026-04-08 '+f.time:'-'}</td>
+      <td style="font-size:14px;">${f.phone}</td>
+      <td>${f.lat?`<button class="btn-map-go" onclick="event.stopPropagation();map.setCenter(new kakao.maps.LatLng(${f.lat},${f.lng}));map.setLevel(3)">지도</button>`:'-'}</td>
+      <td><button class="btn-reject" onclick="event.stopPropagation();if(confirm('친구 연결을 해제하시겠습니까?'))alert('해제되었습니다.') // [더미] DELETE /api/friends/{id} 연결 필요 (MVP 외)">연결 해제</button></td>
+    </tr>`).join('');
+}
+
+function showDetail(i){
+  const f=friends[i];
+  document.getElementById('fTitle').textContent=`${f.nm} (${f.rel})`;
+  document.getElementById('fBody').innerHTML=`
+    <div class="d-row"><span class="dk">이름</span><span class="dv">${f.nm}</span></div>
+    <div class="d-row"><span class="dk">관계</span><span class="dv">${f.rel}</span></div>
+    <div class="d-row"><span class="dk">연락처</span><span class="dv">${f.phone}</span></div>
+    <div class="d-row"><span class="dk">현재 상태</span><span class="dv" style="color:${f.status==='대피소'?'var(--navy)':'#888'}">${f.status}</span></div>
+    <div class="d-row"><span class="dk">대피소</span><span class="dv">${f.shelter}</span></div>
+    <div class="d-row"><span class="dk">주소</span><span class="dv">${f.addr}</span></div>
+    <div class="d-row"><span class="dk">체크인 시각</span><span class="dv">${f.time!=='-'?'2026-04-08 '+f.time:'-'}</span></div>
+    ${f.lat?`<button class="btn-primary" style="width:100%;margin-top:14px;" onclick="document.getElementById('friendModal').classList.remove('open');map.setCenter(new kakao.maps.LatLng(${f.lat},${f.lng}));map.setLevel(3)">지도에서 위치 보기</button>`:'<div style="text-align:center;padding:14px;color:#aaa;border:1px dashed #ddd;margin-top:12px;font-size:14px;">아직 대피소에 체크인하지 않았습니다</div>'}`;
+  document.getElementById('friendModal').classList.add('open');
+}
+
+function sendReq(){
+  const ph=document.getElementById('addPhone').value.trim();
+  if(!ph){alert('전화번호를 입력하세요.');return;}
+  alert(`${ph}로 친구 요청을 보냈습니다.\n상대방이 수락하면 위치를 공유할 수 있습니다.`); // [더미] POST /api/friends/request 연결 필요 (MVP 외)
+  document.getElementById('addPhone').value='';
+}
+function acceptReq(btn,name){ btn.closest('.req-item').remove(); alert(`${name}의 친구 요청을 수락했습니다.`); }
+
+// [더미] 백엔드 연결 시 제거
+const ADMINS={manager:'manager1234',admin2:'admin2024'};
+const ANAMES={manager:'김담당 (재난관리팀)',admin2:'이운영 (시설관리팀)'};
+
+function openLoginModal(){document.getElementById('loginModalBg').classList.add('open');}
+function closeLoginModal(){document.getElementById('loginModalBg').classList.remove('open');}
+function showIdLoginModal(){document.getElementById('modalMethods').style.display='none';document.getElementById('modalIdForm').classList.add('show');}
+function backToMethodsModal(){document.getElementById('modalMethods').style.display='';document.getElementById('modalIdForm').classList.remove('show');}
+function doModalLogin(){
+  const id=document.getElementById('modalId').value.trim();
+  const pw=document.getElementById('modalPw').value;
+  if(!id||!pw){alert('아이디와 비밀번호를 입력하세요.');return;}
+  if(ADMINS[id]===pw){sessionStorage.setItem('adminLoggedIn','true');sessionStorage.setItem('adminId',id);sessionStorage.setItem('adminName',ANAMES[id]||id);window.location.href='admin.html';return;}
+  if(pw.length>=4){sessionStorage.setItem('user',JSON.stringify({name:'김안전',phone:id}));location.reload();}
+  else{document.getElementById('modalErr').classList.add('show');}
+}
+function initHeader(){
+  const raw=sessionStorage.getItem('user');
+  const el=document.getElementById('hdrUtil');
+  if(!el) return;
+  if(raw){
+    try{
+      const u=JSON.parse(raw);
+      const name=u.name||'사용자';
+      el.innerHTML=`<span class="h-username">${name} 님</span><button class="btn-join" onclick="location.href='mypage.html'">마이페이지</button><button class="btn-logout" onclick="sessionStorage.clear();location.reload()">로그아웃</button>`;
+      document.getElementById('myName').textContent=name+' (나)';
+      document.getElementById('myAvatar').textContent=name[0];
+    }catch(e){}
+  } else {
+    el.innerHTML=`<button class="btn-login-h" onclick="openLoginModal()">로그인</button><button class="btn-join" onclick="location.href='signup.html'">회원가입</button>`;
+    const req=document.getElementById('loginRequired');
+    if(req) req.style.display='flex';
+  }
+}
+function hdrSearch(){const q=document.getElementById('hdrSrch').value.trim();if(q)alert(`"${q}" 검색 기능은 준비 중입니다.`);}
+
+initHeader();
+renderFriends();
+
+
+</script>
+</body>
+</html>
