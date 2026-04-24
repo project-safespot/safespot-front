@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>재난문자 - 국민재난대피포털</title>
+<link rel="stylesheet" href="_common.css">
+<style>
+/* page-hero defined in _common.css */
+
+.alerts-layout{display:grid;grid-template-columns:260px 1fr;gap:20px;padding:28px 0 60px;align-items:start;}
+
+/* 좌측 필터 */
+.filter-panel{background:#fff;border:1px solid var(--border);border-top:4px solid var(--navy);}
+.fp-head{padding:13px 16px;border-bottom:1px solid var(--border);font-size:15px;font-weight:700;color:var(--navy);}
+.fp-section{padding:14px 16px;border-bottom:1px solid var(--border);}
+.fp-section:last-child{border-bottom:none;}
+.fp-section h4{font-size:13px;font-weight:700;color:var(--muted);margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px;}
+.fp-check{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:14px;cursor:pointer;}
+.fp-check input{width:16px;height:16px;accent-color:var(--navy);}
+.fp-check .dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+.date-input{width:100%;border:1px solid #ccc;padding:8px 10px;font-size:14px;font-family:inherit;outline:none;margin-bottom:6px;}
+.date-input:focus{border-color:var(--navy);}
+.btn-filter-apply{width:100%;background:var(--navy);color:#fff;border:none;padding:10px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:4px;}
+.btn-filter-apply:hover{background:#2a4a80;}
+.btn-filter-reset{width:100%;background:#fff;color:#888;border:1px solid #ccc;padding:9px;font-size:14px;cursor:pointer;font-family:inherit;margin-top:6px;}
+
+/* 우측 알림 목록 */
+.alerts-main{}
+.alerts-toolbar{background:#fff;border:1px solid var(--border);padding:13px 18px;display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;gap:12px;}
+.alerts-toolbar .srch{display:flex;border:1px solid #ccc;overflow:hidden;flex:1;max-width:380px;}
+.alerts-toolbar .srch input{flex:1;border:none;padding:8px 12px;font-size:14px;font-family:inherit;outline:none;}
+.alerts-toolbar .srch button{background:var(--navy);color:#fff;border:none;padding:8px 16px;font-size:13px;cursor:pointer;font-family:inherit;}
+.alerts-count{font-size:14px;color:#888;white-space:nowrap;}
+.alerts-count strong{color:var(--navy);font-weight:700;}
+
+/* 알림 아이템 */
+.alert-item{background:#fff;border:1px solid var(--border);border-left:5px solid;margin-bottom:10px;cursor:pointer;transition:box-shadow .15s;}
+.alert-item:hover{box-shadow:0 2px 10px rgba(0,0,0,.1);}
+.alert-item.lv-disaster{border-left-color:var(--red);}
+.alert-item.lv-warning{border-left-color:#e67e22;}
+.alert-item.lv-info{border-left-color:#2563a8;}
+.alert-item.lv-safe{border-left-color:#27ae60;}
+.ai-head{padding:13px 18px 8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.ai-type{font-size:12px;font-weight:700;padding:3px 10px;border:1px solid;}
+.lv-disaster .ai-type{color:var(--red);border-color:var(--red);background:#fff0f0;}
+.lv-warning .ai-type{color:#e67e22;border-color:#e67e22;background:#fff8f0;}
+.lv-info .ai-type{color:#2563a8;border-color:#2563a8;background:#e8f0fb;}
+.lv-safe .ai-type{color:#27ae60;border-color:#27ae60;background:#f0faf0;}
+.ai-region{font-size:13px;font-weight:700;color:#333;background:#f0f4fa;padding:3px 10px;}
+.ai-time{font-size:13px;color:#aaa;margin-left:auto;}
+.ai-body{padding:0 18px 14px;}
+.ai-text{font-size:15px;color:#222;line-height:1.7;margin-bottom:4px;}
+.ai-sender{font-size:13px;color:#aaa;}
+.ai-new{background:var(--red);color:#fff;font-size:11px;font-weight:700;padding:2px 7px;flex-shrink:0;}
+
+/* 페이지네이션 */
+.pagination{display:flex;justify-content:center;gap:4px;padding:16px 0;}
+.pg-btn{width:36px;height:36px;border:1px solid var(--border);background:#fff;font-size:14px;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;}
+.pg-btn.on{background:var(--navy);color:#fff;border-color:var(--navy);font-weight:700;}
+.pg-btn:hover:not(.on){background:#eef2fb;}
+
+/* 통계 요약 */
+.stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px;}
+.stat-card{background:#fff;border:1px solid var(--border);padding:14px 16px;text-align:center;}
+.stat-card .sv{font-size:26px;font-weight:800;line-height:1;}
+.stat-card .sk{font-size:13px;color:#888;margin-top:4px;}
+.sc-r{color:var(--red);} .sc-o{color:#e67e22;} .sc-b{color:#2563a8;} .sc-g{color:#27ae60;}
+
+/* 상세 모달 */
+.modal-detail{width:580px;}
+.md-type-bar{padding:10px 20px;font-size:14px;font-weight:700;color:#fff;margin-bottom:0;}
+.md-row{display:flex;gap:8px;padding:9px 0;border-bottom:1px solid #f5f5f5;font-size:14px;}
+.md-row:last-child{border-bottom:none;}
+.md-k{color:#888;min-width:90px;flex-shrink:0;}
+.md-v{color:#222;font-weight:600;line-height:1.6;}
+.md-msg{background:#f8faff;border:1px solid var(--border);padding:14px 16px;font-size:15px;line-height:1.8;color:#222;margin:14px 0;}
+
+
+/* ================================================
+   모바일 반응형 — 행안부 스타일 기준
+   768px 이하 모바일 | PC 레이아웃 그대로 유지
+   ================================================ */
+@media (max-width: 768px) {
+
+  /* 정부 최상단 바 축소 */
+  .govbar { height: 30px; }
+  .govbar-left { font-size: 12px; gap: 5px; }
+  .govbar-right { display: none; }
+  .govbar-inner { padding: 0 14px; }
+
+    /* 헤더 — 모바일: 돋보기 버튼 방식 */
+  .header-inner {
+    padding: 0 14px;
+    height: 52px;
+    flex-wrap: nowrap;
+    gap: 8px;
+    align-items: center;
+  }
+  .h-logo { min-width: 0; gap: 8px; flex: 1; }
+  .h-logo-mark { width: 34px; height: 34px; flex-shrink: 0; }
+  .h-logo-mark svg { width: 22px; height: 22px; }
+  .h-logo-texts strong { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px; }
+  .h-logo-texts span { display: none; }
+  .h-userinfo { flex-shrink: 0; display: flex; align-items: center; gap: 4px; margin-left: auto; }
+  .h-username { font-size: 12px; }
+  .btn-join, .btn-logout { font-size: 12px; padding: 5px 9px; border-radius: 4px; }
+
+
+  /* 네비게이션 — 2줄 3개씩 배치 */
+  .main-nav { height: auto; border-bottom: 3px solid var(--red); }
+  .main-nav-inner {
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    height: auto;
+    gap: 0;
+  }
+  .nav-item {
+    flex: none;
+    height: 44px;
+    font-size: 13px;
+    font-weight: 700;
+    border-right: 1px solid rgba(255,255,255,.12);
+    border-bottom: 1px solid rgba(255,255,255,.08);
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+  }
+  .nav-item:nth-child(3) { border-right: none; }
+  .nav-item:nth-child(4),
+  .nav-item:nth-child(5),
+  .nav-item:nth-child(6) { border-bottom: none; }
+  .nav-item:nth-child(6) { border-right: none; }
+
+  /* 긴급 재난 띠 */
+  .emg-strip .wrap { font-size: 12px; padding: 0 14px; gap: 8px; }
+  .emg-tag { font-size: 11px; padding: 2px 7px; white-space: nowrap; }
+
+  /* 페이지 히어로 */
+  .page-hero { padding: 18px 0; }
+  .page-hero-inner { padding: 0 14px; flex-direction: column; gap: 6px; }
+  .page-hero h1 { font-size: 20px; }
+  .page-hero p { font-size: 13px; }
+
+  /* 경로 바 */
+  .ptbar { padding: 8px 14px; }
+  .ptbar-inner { font-size: 12px; }
+
+  /* wrap */
+  .wrap { padding: 0 14px; }
+
+  /* 섹션 타이틀 */
+  .sec-ttl { font-size: 16px; padding: 14px 0 10px; }
+
+  /* 푸터 */
+  footer { padding: 16px 0; }
+  footer .wrap { flex-direction: column; gap: 6px; text-align: center; font-size: 12px; }
+  .ft-links { flex-wrap: wrap; justify-content: center; gap: 8px; }
+  .ft-links a { font-size: 12px; }
+
+  /* 공통 모달 */
+  .modal-bg .modal { width: 96vw !important; max-height: 90vh; overflow-y: auto; }
+  .modal-form { grid-template-columns: 1fr !important; }
+}
+
+@media (max-width: 768px) {
+  .alerts-layout { grid-template-columns: 1fr !important; gap: 0; padding: 14px 0 40px; }
+
+  /* 필터 패널 */
+  .filter-panel { margin: 0 14px 14px; border-radius: 8px; }
+  .fp-head { font-size: 14px; padding: 12px 14px; }
+  .fp-section { padding: 12px 14px; }
+  .fp-section h4 { font-size: 12px; margin-bottom: 8px; }
+  .fp-check { font-size: 13px; padding: 4px 0; }
+  .date-input { font-size: 14px; padding: 9px 10px; border-radius: 6px; }
+  .btn-filter-apply { font-size: 14px; padding: 11px; border-radius: 6px; }
+  .btn-filter-reset { font-size: 13px; padding: 10px; border-radius: 6px; }
+
+  /* 통계 */
+  .stat-row { grid-template-columns: repeat(2, 1fr) !important; gap: 8px; margin-bottom: 12px; }
+  .stat-card { padding: 12px 10px; border-radius: 8px; }
+  .stat-card .sv { font-size: 24px; }
+  .stat-card .sk { font-size: 12px; margin-top: 3px; }
+
+  /* 검색 툴바 */
+  .alerts-toolbar { padding: 10px 14px; gap: 8px; flex-wrap: wrap; border-radius: 6px; margin-bottom: 10px; }
+  .alerts-toolbar .srch { max-width: 100%; border-radius: 6px; overflow: hidden; }
+  .alerts-toolbar .srch input { font-size: 14px; padding: 10px 12px; }
+  .alerts-toolbar .srch button { font-size: 13px; padding: 10px 14px; }
+  .alerts-count { font-size: 13px; }
+
+  /* 알림 카드 */
+  .alert-item { border-radius: 8px; margin-bottom: 8px; }
+  .ai-head { padding: 11px 14px 7px; gap: 7px; flex-wrap: wrap; }
+  .ai-type { font-size: 11px; padding: 2px 8px; border-radius: 3px; }
+  .ai-region { font-size: 12px; padding: 2px 8px; border-radius: 3px; }
+  .ai-time { font-size: 12px; margin-left: auto; }
+  .ai-body { padding: 0 14px 13px; }
+  .ai-text { font-size: 14px; line-height: 1.6; }
+  .ai-sender { font-size: 12px; }
+
+  /* 페이지네이션 */
+  .pagination { padding: 12px 0; gap: 4px; }
+  .pg-btn { width: 34px; height: 34px; font-size: 13px; border-radius: 4px; }
+}
+
+</style>
+</head>
+<body>
+
+
+<!-- 정부 최상단 바 -->
+<div class="govbar">
+  <div class="govbar-inner">
+    <div class="govbar-left"><span class="taeguk"></span>이 누리집은 대한민국 공식 전자정부 누리집입니다.</div>
+    <div class="govbar-right"><a href="#">ENGLISH</a><span>|</span><a href="#">어린이</a><span>|</span><a href="#">사이트맵</a><span>|</span><a href="#">안내도우미</a></div>
+  </div>
+</div>
+
+<!-- 헤더 -->
+<header>
+  <div class="header-inner">
+    <a href="index.html" class="h-logo">
+      <div class="h-logo-mark"><svg viewBox="0 0 34 34" fill="none"><circle cx="17" cy="17" r="16" fill="#1d3461" stroke="#4a6fa5" stroke-width="1"/><path d="M17 5 A12 12 0 0 1 29 17 A12 12 0 0 0 17 5Z" fill="#c8102e" opacity=".85"/><path d="M17 29 A12 12 0 0 1 5 17 A12 12 0 0 0 17 29Z" fill="#c8102e" opacity=".85"/><circle cx="17" cy="17" r="4" fill="#fff"/></svg></div>
+      <div class="h-logo-texts"><strong>국민재난대피포털</strong><span>국민 재난 대피 안전 서비스</span></div>
+    </a>
+    <div class="h-userinfo" id="hdrUtil"></div>
+  </div>
+</header>
+
+<!-- 주메뉴 -->
+<nav class="main-nav">
+  <div class="main-nav-inner">
+    <a class="nav-item" href="dashboard.html">재난현황</a>
+    <a class="nav-item" href="shelter.html">대피소 찾기</a>
+    <a class="nav-item on" href="alerts.html">재난문자</a>
+    <a class="nav-item" href="family.html">가족 찾기</a>
+    <a class="nav-item" href="checklist.html">재난 대비</a>
+    <a class="nav-item" href="guide.html">국민행동요령</a>
+  </div>
+</nav>
+
+<!-- 긴급 재난 띠 -->
+<div class="emg-strip" id="emgStrip">
+  <div class="wrap">
+    <span class="emg-tag">긴급재난문자</span>
+    <span><strong>[호우경보]</strong> 서울 강남·서초·송파구 호우경보 발효 — 지하 공간 이용 자제, 저지대 주민 즉시 대피 요망 (2026-04-09 09:32)</span>
+    <button class="emg-x" onclick="this.parentElement.parentElement.style.display='none'">✕</button>
+  </div>
+</div>
+
+<!-- 페이지 타이틀 -->
+<div class="ptbar">
+  <div class="ptbar-inner"><a href="index.html">홈</a> &gt; <span class="curr">재난문자</span></div>
+</div>
+
+<!-- 페이지 히어로 -->
+<div class="page-hero">
+  <div class="page-hero-inner">
+    <div><h1>재난문자 수신 현황</h1><p>지역별 재난문자 수신 내역을 확인하고 필터링하세요.</p></div>
+  </div>
+</div>
+
+<!-- 본문 -->
+<div class="wrap">
+<div class="alerts-layout">
+
+  <!-- 좌측 필터 -->
+  <div class="filter-panel">
+    <div class="fp-head">검색 필터</div>
+    <div class="fp-section">
+      <h4>문자 유형</h4>
+      <label class="fp-check"><input type="checkbox" checked onchange="applyFilter()"><span class="dot" style="background:var(--red)"></span>재난위기경보</label>
+      <label class="fp-check"><input type="checkbox" checked onchange="applyFilter()"><span class="dot" style="background:#e67e22"></span>호우·강풍 특보</label>
+      <label class="fp-check"><input type="checkbox" checked onchange="applyFilter()"><span class="dot" style="background:#2563a8"></span>안전 안내</label>
+      <label class="fp-check"><input type="checkbox" checked onchange="applyFilter()"><span class="dot" style="background:#27ae60"></span>해제·정상화</label>
+    </div>
+    <div class="fp-section">
+      <h4>발송 지역</h4>
+      <div style="font-size:14px;color:var(--navy);font-weight:600;padding:4px 0;">📍 서울특별시</div>
+      <div style="font-size:12px;color:#888;margin-top:4px;">서울시 재난문자만 표시됩니다.</div>
+    </div>
+    <div class="fp-section">
+      <h4>날짜 범위</h4>
+      <input type="date" class="date-input" id="dateFrom" value="2026-04-09">
+      <input type="date" class="date-input" id="dateTo" value="2026-04-09">
+      <button class="btn-filter-apply" onclick="applyFilter()">필터 적용</button>
+      <button class="btn-filter-reset" onclick="resetFilter()">초기화</button>
+    </div>
+  </div>
+
+  <!-- 우측 알림 목록 -->
+  <div class="alerts-main">
+    <!-- 통계 요약 -->
+    <div class="stat-row">
+      <div class="stat-card"><div class="sv sc-r" id="cntDisaster">8</div><div class="sk">재난위기경보</div></div>
+      <div class="stat-card"><div class="sv sc-o" id="cntWarning">12</div><div class="sk">호우·강풍 특보</div></div>
+      <div class="stat-card"><div class="sv sc-b" id="cntInfo">6</div><div class="sk">안전 안내</div></div>
+      <div class="stat-card"><div class="sv sc-g" id="cntSafe">3</div><div class="sk">해제·정상화</div></div>
+    </div>
+
+    <!-- 검색 툴바 -->
+    <div class="alerts-toolbar">
+      <div class="srch">
+        <input type="text" id="kw" placeholder="지역, 내용 검색" onkeydown="if(event.key==='Enter')applyFilter()">
+        <button onclick="applyFilter()">검색</button>
+      </div>
+      <span class="alerts-count" id="alertCount"><strong>29개</strong> 문자 표시 중</span>
+    </div>
+
+    <!-- 알림 목록 -->
+    <div id="alertList"></div>
+
+    <!-- 페이지네이션 -->
+    <div class="pagination">
+      <button class="pg-btn">◀</button>
+      <button class="pg-btn on">1</button>
+      <button class="pg-btn">2</button>
+      <button class="pg-btn">3</button>
+      <button class="pg-btn">▶</button>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- 로그인 모달 -->
+<div class="login-modal-bg" id="loginModalBg" onclick="if(event.target===this)closeLoginModal()">
+  <div class="login-modal">
+    <div class="lc-top">
+      <h2>로그인</h2>
+      <button class="login-modal-close" onclick="closeLoginModal()">✕</button>
+    </div>
+    <div class="lc-switch-wrap">
+      <div class="lc-methods" id="modalMethods">
+        <div class="lc-method" onclick="alert('공동인증서(구 공인인증서) 및 금융인증서로 로그인합니다.\n(데모: 아이디 로그인을 이용해주세요)')">
+          <div class="lc-icon-box icon-cert"></div>
+          <span class="lc-method-name">공동·금융인증</span>
+        </div>
+        <div class="lc-method" onclick="alert('카카오·네이버·PASS 간편인증으로 로그인합니다.\n(데모: 아이디 로그인을 이용해주세요)')">
+          <div class="lc-icon-box icon-simple"></div>
+          <span class="lc-method-name">간편인증</span>
+        </div>
+        <div class="lc-method" onclick="showIdLoginModal()">
+          <div class="lc-icon-box icon-id"></div>
+          <span class="lc-method-name">아이디 로그인</span>
+        </div>
+      </div>
+      <div class="lc-id-form" id="modalIdForm">
+        <button class="btn-back-login" onclick="backToMethodsModal()">← 다른 방법으로 로그인</button>
+        <div class="lf-err" id="modalErr">아이디 또는 비밀번호가 올바르지 않습니다.</div>
+        <div class="lf-row"><input type="text" id="modalId" placeholder="아이디" onkeydown="if(event.key==='Enter')doModalLogin()"></div>
+        <div class="lf-row"><input type="password" id="modalPw" placeholder="비밀번호" onkeydown="if(event.key==='Enter')doModalLogin()"></div>
+        <button class="btn-lc-do" onclick="doModalLogin()">로그인</button>
+        <div class="lc-id-links"><a href="#">아이디 찾기</a><a href="#">비밀번호 찾기</a></div>
+      </div>
+    </div>
+    <button class="btn-other-login" onclick="alert('공동인증서·카카오·네이버 간편인증 등 다양한 로그인을 지원합니다.')">다른 로그인 안내</button>
+  </div>
+</div>
+
+<!-- 상세 모달 -->
+<div class="modal-bg" id="alertModal" onclick="if(event.target===this)this.classList.remove('open')">
+  <div class="modal modal-detail">
+    <div class="modal-head">
+      <h3>재난문자 상세</h3>
+      <button class="modal-close" onclick="document.getElementById('alertModal').classList.remove('open')">✕</button>
+    </div>
+    <div class="modal-body" id="alertDetail"></div>
+    <div class="modal-foot"><button class="btn-primary" onclick="document.getElementById('alertModal').classList.remove('open')">닫기</button></div>
+  </div>
+</div>
+
+<footer>
+  <div class="wrap">
+    <span>© 2026 행정안전부 국민재난대피포털. All rights reserved.</span>
+    <div class="ft-links">
+      <a href="#">개인정보처리방침</a><a href="#">이용약관</a><a href="#">접근성 안내</a><a href="#">사이트맵</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+const ALERTS = [
+  {id:1,lv:'disaster',type:'재난위기경보',region:'서울 강남구',time:'2026-04-09 09:32',sender:'행정안전부',isNew:true,
+   text:'[호우경보] 서울 강남구 일대 호우경보 발효. 지하 공간 이용 즉시 자제, 저지대 주민 대피소로 이동 바랍니다.',
+   detail:{발송기관:'행정안전부 국가재난안전관리본부',수신지역:'서울특별시 강남구 전 지역',재난유형:'호우',경보단계:'경보',대피소:'강남구민회관, 역삼동 주민센터, 대치동 주민센터',행동요령:'지하 공간 즉시 대피, 하천변 접근 금지, 차량 이동 자제'}},
+  {id:2,lv:'disaster',type:'재난위기경보',region:'서울 서초구',time:'2026-04-09 09:28',sender:'서울특별시',isNew:true,
+   text:'[호우경보] 서초구 전역 호우경보. 강풍 동반 집중호우 예보. 외출 자제 및 하천변 접근 금지.',
+   detail:{발송기관:'서울특별시 재난안전상황실',수신지역:'서울특별시 서초구 전 지역',재난유형:'호우',경보단계:'경보',대피소:'서초구청, 방배동 주민센터, 반포동 주민센터',행동요령:'외출 자제, 배수구 점검, 지하 공간 접근 금지'}},
+  {id:3,lv:'disaster',type:'재난위기경보',region:'서울 송파구',time:'2026-04-09 09:15',sender:'서울특별시',isNew:true,
+   text:'[홍수주의보] 탄천 수위 급상승. 인근 주민은 즉시 고지대 또는 대피소로 이동하시기 바랍니다.',
+   detail:{발송기관:'서울특별시 재난안전상황실',수신지역:'서울특별시 송파구 전 지역',재난유형:'홍수',경보단계:'주의보',대피소:'올림픽공원, 잠실 주민센터',행동요령:'탄천변 즉시 이탈, 대피소 이동'}},
+  {id:4,lv:'warning',type:'호우·강풍 특보',region:'서울 영등포구',time:'2026-04-09 09:05',sender:'기상청',isNew:true,
+   text:'[호우특보] 영등포구 안양천 범람 우려. 지하 거주 세대 및 반지하 주택 주민은 즉시 대피 바랍니다.',
+   detail:{발송기관:'기상청 서울지방기상청',수신지역:'서울특별시 영등포구',재난유형:'호우',경보단계:'특보',대피소:'영등포 시장역 인근 대피소, 여의도 공원',행동요령:'지하·반지하 거주자 즉시 대피'}},
+  {id:5,lv:'warning',type:'호우·강풍 특보',region:'서울 동작구',time:'2026-04-09 08:55',sender:'기상청',isNew:false,
+   text:'[강풍특보] 동작구 일대 초속 23m 강풍 예보. 간판·시설물 고정, 야외 작업 중단 바랍니다.',
+   detail:{발송기관:'기상청 서울지방기상청',수신지역:'서울특별시 동작구',재난유형:'강풍',경보단계:'특보',대피소:'-',행동요령:'간판 고정, 야외 활동 중단, 강변 접근 금지'}},
+  {id:6,lv:'warning',type:'호우·강풍 특보',region:'서울 관악구',time:'2026-04-09 08:45',sender:'기상청',isNew:false,
+   text:'[산사태경보] 관악산 인근 산사태 위험 경보. 산 인근 주민은 즉시 안전한 장소로 대피 바랍니다.',
+   detail:{발송기관:'산림청·기상청 공동발령',수신지역:'서울특별시 관악구',재난유형:'산사태',경보단계:'경보',대피소:'관악구민회관, 낙성대 주민센터',행동요령:'산 인근 즉시 대피, 경사지 접근 금지'}},
+  {id:7,lv:'info',type:'안전 안내',region:'서울 노원구',time:'2026-04-09 08:30',sender:'노원구청',isNew:false,
+   text:'[대피소 개방] 불암산 인근 임시대피소(노원구 상계동 산148)가 긴급 개방되었습니다. 필요한 주민은 이용 바랍니다.',
+   detail:{발송기관:'노원구청 재난안전과',수신지역:'서울특별시 노원구 상계동·중계동',재난유형:'대피소 안내',경보단계:'안내',대피소:'불암산 기슭 임시대피소',행동요령:'대피소 이동 후 담당자 안내에 따를 것'}},
+  {id:8,lv:'info',type:'안전 안내',region:'경기 수원시',time:'2026-04-09 08:20',sender:'수원시청',isNew:false,
+   text:'[교통 통제] 수원시 팔달구 화서동 일대 침수로 도로 통제. 우회도로 이용 바랍니다.',
+   detail:{발송기관:'수원시청 안전관리과',수신지역:'경기도 수원시 팔달구',재난유형:'교통통제',경보단계:'안내',대피소:'-',행동요령:'우회도로 이용, 침수 구간 진입 금지'}},
+  {id:9,lv:'warning',type:'호우·강풍 특보',region:'서울 마포구',time:'2026-04-09 08:10',sender:'기상청',isNew:false,
+   text:'[정전 주의] 집중호우로 마포구 일부 지역 정전 발생. 한전 복구 작업 중. 의료기기 사용자 주의 바랍니다.',
+   detail:{발송기관:'한국전력공사·마포구청',수신지역:'서울특별시 마포구 서교동·합정동',재난유형:'정전',경보단계:'주의',대피소:'-',행동요령:'배전함 접근 금지, 의료기기 사용자 119 신고'}},
+  {id:10,lv:'info',type:'안전 안내',region:'서울 성동구',time:'2026-04-09 07:55',sender:'서울특별시',isNew:false,
+   text:'[교통 통제] 성동구 중랑천 수위 상승으로 주변 도로 일부 통제. 우회 안내에 따라 주시기 바랍니다.',
+   detail:{발송기관:'서울특별시 도로관리과',수신지역:'서울특별시 성동구 왕십리·행당동',재난유형:'도로통제',경보단계:'안내',대피소:'-',행동요령:'우회도로 이용'}},
+  {id:11,lv:'disaster',type:'재난위기경보',region:'인천 부평구',time:'2026-04-09 07:40',sender:'인천광역시',isNew:false,
+   text:'[호우주의보] 인천 부평구 일대 집중호우로 저지대 침수 우려. 지하 공간 이용 자제 바랍니다.',
+   detail:{발송기관:'인천광역시 재난안전본부',수신지역:'인천광역시 부평구',재난유형:'호우',경보단계:'주의보',대피소:'부평구청 별관, 부평 주민센터',행동요령:'지하 공간 이용 자제, 배수구 확인'}},
+  {id:12,lv:'warning',type:'호우·강풍 특보',region:'서울 광진구',time:'2026-04-09 07:25',sender:'기상청',isNew:false,
+   text:'[호우주의보] 광진구 시간당 40mm 이상 강우 예보. 하천변 출입 통제. 어린이·노약자 외출 자제 바랍니다.',
+   detail:{발송기관:'기상청 서울지방기상청',수신지역:'서울특별시 광진구',재난유형:'호우',경보단계:'주의보',대피소:'광진구 어린이대공원',행동요령:'하천변 출입 통제, 외출 자제'}},
+  {id:13,lv:'safe',type:'해제·정상화',region:'서울 은평구',time:'2026-04-09 07:10',sender:'서울특별시',isNew:false,
+   text:'[특보 해제] 은평구 강풍특보가 해제되었습니다. 잔여 피해 복구 작업 중이오니 주의 바랍니다.',
+   detail:{발송기관:'서울특별시 재난안전상황실',수신지역:'서울특별시 은평구',재난유형:'강풍 해제',경보단계:'해제',대피소:'-',행동요령:'복구 작업 구간 접근 주의'}},
+  {id:14,lv:'info',type:'안전 안내',region:'경기 과천시',time:'2026-04-09 06:50',sender:'과천시청',isNew:false,
+   text:'[대피소 운영] 서울대공원 임시대피소 운영 개시. 현재 입소자 2,100명. 24시간 운영 중.',
+   detail:{발송기관:'과천시청 재난안전과',수신지역:'경기도 과천시',재난유형:'대피소 운영',경보단계:'안내',대피소:'서울대공원 임시대피소',행동요령:'질서 있게 입소, 담당자 안내에 따를 것'}},
+  {id:15,lv:'disaster',type:'재난위기경보',region:'서울 강북구',time:'2026-04-09 06:30',sender:'행정안전부',isNew:false,
+   text:'[집중호우 경보] 강북구 우이천 범람 경보 발령. 인근 주민은 즉시 고지대로 대피 바랍니다.',
+   detail:{발송기관:'행정안전부 국가재난안전관리본부',수신지역:'서울특별시 강북구',재난유형:'집중호우',경보단계:'경보',대피소:'강북구청, 수유 주민센터',행동요령:'우이천 인근 즉시 대피, 지하 공간 접근 금지'}},
+];
+
+// 서울시 재난만 표시
+// [더미] ALERTS → GET /api/disaster-alerts?region=서울특별시 응답으로 교체
+let filtered = ALERTS.filter(a => a.region.toLowerCase().includes('서울'));
+
+const lvClass = {disaster:'lv-disaster',warning:'lv-warning',info:'lv-info',safe:'lv-safe'};
+
+function renderAlerts(){
+  const list = document.getElementById('alertList');
+  document.getElementById('alertCount').innerHTML = `<strong>${filtered.length}개</strong> 문자 표시 중`;
+  if(!filtered.length){
+    list.innerHTML='<div style="text-align:center;padding:40px;color:#aaa;font-size:15px;background:#fff;border:1px solid var(--border);">조건에 맞는 재난문자가 없습니다.</div>';
+    return;
+  }
+  list.innerHTML = filtered.map(a=>`
+    <div class="alert-item ${lvClass[a.lv]}" onclick="showDetail(${a.id})">
+      <div class="ai-head">
+        ${a.isNew?'<span class="ai-new">NEW</span>':''}
+        <span class="ai-type">${a.type}</span>
+        <span class="ai-region">${a.region}</span>
+        <span class="ai-time">${a.time}</span>
+      </div>
+      <div class="ai-body">
+        <div class="ai-text">${a.text}</div>
+        <div class="ai-sender">발송: ${a.sender}</div>
+      </div>
+    </div>`).join('');
+}
+
+function showDetail(id){
+  const a = ALERTS.find(x=>x.id===id);
+  if(!a) return;
+  const col = a.lv==='disaster'?'#c8102e':a.lv==='warning'?'#e67e22':a.lv==='info'?'#2563a8':'#27ae60';
+  document.getElementById('alertDetail').innerHTML=`
+    <div style="background:${col};color:#fff;padding:10px 20px;font-size:14px;font-weight:700;margin:-20px -20px 16px;">${a.type} · ${a.region}</div>
+    <div class="md-msg">${a.text}</div>
+    <div class="md-row"><span class="md-k">발송 일시</span><span class="md-v">${a.time}</span></div>
+    <div class="md-row"><span class="md-k">발송 기관</span><span class="md-v">${a.detail.발송기관}</span></div>
+    <div class="md-row"><span class="md-k">수신 지역</span><span class="md-v">${a.detail.수신지역}</span></div>
+    <div class="md-row"><span class="md-k">재난 유형</span><span class="md-v">${a.detail.재난유형}</span></div>
+    <div class="md-row"><span class="md-k">경보 단계</span><span class="md-v">${a.detail.경보단계}</span></div>
+    <div class="md-row"><span class="md-k">대피소</span><span class="md-v">${a.detail.대피소}</span></div>
+    <div class="md-row"><span class="md-k">행동요령</span><span class="md-v">${a.detail.행동요령}</span></div>`;
+  document.getElementById('alertModal').classList.add('open');
+}
+
+/* ── TODO: 백엔드 연결 시 목 데이터(ALERTS) 대신 API 호출로 교체 ──
+async function loadAlertsFromAPI() {
+  // GET /api/disaster-alerts?region=서울특별시
+  try {
+    const res = await fetch(API_BASE + '/disaster-alerts?region=' + encodeURIComponent('서울특별시'), {
+      headers: { 'Authorization': 'Bearer ' + (sessionStorage.getItem('accessToken')||'') }
+    });
+    const json = await res.json();
+    if(json.success) {
+      filtered = json.data.items;
+      renderAlerts();
+      updateStats();
+    }
+  } catch(e) { console.warn('API 연결 실패, 목 데이터 사용:', e.message); }
+}
+── 목 데이터 fallback 끝 ── */
+
+function applyFilter(){
+  const kw = document.getElementById('kw').value.trim().toLowerCase();
+  // 서울시 재난만 표시 (region에 '서울' 포함된 것만)
+  filtered = ALERTS.filter(a=>{
+    if(!a.region.toLowerCase().includes('서울')) return false;
+    if(kw && !a.region.toLowerCase().includes(kw) && !a.text.toLowerCase().includes(kw)) return false;
+    return true;
+  });
+  renderAlerts();
+  updateStats();
+}
+
+function resetFilter(){
+  document.getElementById('kw').value='';
+  // 서울시 고정 — 초기화해도 서울시 데이터만
+  filtered = ALERTS.filter(a => a.region.toLowerCase().includes('서울'));
+  renderAlerts();
+  updateStats();
+}
+
+function updateStats(){
+  document.getElementById('cntDisaster').textContent=filtered.filter(a=>a.lv==='disaster').length;
+  document.getElementById('cntWarning').textContent=filtered.filter(a=>a.lv==='warning').length;
+  document.getElementById('cntInfo').textContent=filtered.filter(a=>a.lv==='info').length;
+  document.getElementById('cntSafe').textContent=filtered.filter(a=>a.lv==='safe').length;
+}
+
+// [더미] 백엔드 연결 시 제거
+const ADMINS={manager:'manager1234',admin2:'admin2024'};
+const ANAMES={manager:'김담당 (재난관리팀)',admin2:'이운영 (시설관리팀)'};
+
+function openLoginModal(){document.getElementById('loginModalBg').classList.add('open');}
+function closeLoginModal(){document.getElementById('loginModalBg').classList.remove('open');}
+function showIdLoginModal(){document.getElementById('modalMethods').style.display='none';document.getElementById('modalIdForm').classList.add('show');}
+function backToMethodsModal(){document.getElementById('modalMethods').style.display='';document.getElementById('modalIdForm').classList.remove('show');}
+function doModalLogin(){
+  const id=document.getElementById('modalId').value.trim();
+  const pw=document.getElementById('modalPw').value;
+  if(!id||!pw){alert('아이디와 비밀번호를 입력하세요.');return;}
+  if(ADMINS[id]===pw){sessionStorage.setItem('adminLoggedIn','true');sessionStorage.setItem('adminId',id);sessionStorage.setItem('adminName',ANAMES[id]||id);window.location.href='admin.html';return;}
+  if(pw.length>=4){sessionStorage.setItem('user',JSON.stringify({name:'김안전',phone:id}));location.reload();} // [더미]
+  else{document.getElementById('modalErr').classList.add('show');}
+}
+function initHeader(){
+  const raw=sessionStorage.getItem('user');
+  const el=document.getElementById('hdrUtil');
+  if(!el)return;
+  if(raw){try{const u=JSON.parse(raw);el.innerHTML=`<span class="h-username">${u.name||'사용자'} 님</span><button class="btn-join" onclick="location.href='mypage.html'">마이페이지</button><button class="btn-logout" onclick="sessionStorage.clear();location.reload()">로그아웃</button>`;}catch(e){}}
+  else{el.innerHTML=`<button class="btn-login-h" onclick="openLoginModal()">로그인</button><button class="btn-join" onclick="location.href='signup.html'">회원가입</button>`;}
+}
+function hdrSearch(){const q=document.getElementById('hdrSrch').value.trim();if(q)alert(`"${q}" 검색 기능은 준비 중입니다.`);}
+
+initHeader();
+renderAlerts();
+
+// 5초마다 NEW 표시 업데이트 시뮬레이션
+setInterval(()=>{
+  const newBadges = document.querySelectorAll('.ai-new');
+  if(newBadges.length) newBadges.forEach(b=>b.style.opacity=b.style.opacity==='0'?'1':'0');
+}, 800);
+
+
+</script>
+</body>
+</html>

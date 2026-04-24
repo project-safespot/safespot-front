@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>국민행동요령 - 국민재난대피포털</title>
+<link rel="stylesheet" href="_common.css">
+<style>
+/* page-hero defined in _common.css */
+
+.guide-layout{display:flex;gap:24px;padding:32px 0 60px;align-items:flex-start;}
+.guide-sidebar{width:220px;flex-shrink:0;position:sticky;top:20px;}
+.guide-nav-card{background:#fff;border:1px solid var(--border);border-top:4px solid var(--navy);}
+.guide-nav-card h3{padding:12px 16px;font-size:15px;font-weight:700;color:var(--navy);border-bottom:1px solid var(--border);}
+.gnav-item{display:flex;align-items:center;gap:10px;padding:11px 16px;font-size:14px;color:#333;cursor:pointer;border-bottom:1px solid #f0f4fa;transition:background .12s;}
+.gnav-item:last-child{border-bottom:none;}
+.gnav-item:hover,.gnav-item.active{background:#eef2fb;color:var(--navy);font-weight:600;}
+.gnav-icon{font-size:18px;width:24px;text-align:center;flex-shrink:0;}
+
+.guide-main{flex:1;min-width:0;}
+.guide-section{display:none;}
+.guide-section.active{display:block;}
+
+.guide-card{background:#fff;border:1px solid var(--border);border-top:4px solid var(--red);margin-bottom:20px;}
+.guide-card-head{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;}
+.guide-card-icon{font-size:28px;}
+.guide-card-head h2{font-size:20px;font-weight:700;color:var(--navy);}
+.guide-card-head p{font-size:14px;color:#888;margin-top:2px;}
+.guide-card-body{padding:20px;}
+
+.step-list{counter-reset:step;}
+.step-item{display:flex;gap:16px;margin-bottom:18px;align-items:flex-start;}
+.step-num{width:32px;height:32px;border-radius:50%;background:var(--navy);color:#fff;font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;}
+.step-content{}
+.step-content strong{display:block;font-size:15px;font-weight:700;color:#1a1a1a;margin-bottom:4px;}
+.step-content p{font-size:14px;color:#555;line-height:1.7;}
+
+.tip-box{background:#eef2fb;border-left:4px solid var(--navy);padding:12px 16px;margin-top:14px;font-size:14px;color:#1d3461;line-height:1.7;}
+.warn-box{background:#fff0f0;border-left:4px solid var(--red);padding:12px 16px;margin-top:14px;font-size:14px;color:#7a0000;line-height:1.7;}
+.warn-box strong,.tip-box strong{font-weight:700;}
+
+.sub-section{margin-bottom:22px;}
+.sub-section h3{font-size:16px;font-weight:700;color:var(--navy);margin-bottom:12px;padding-bottom:8px;border-bottom:2px solid var(--border);display:flex;align-items:center;gap:8px;}
+.sub-section h3::before{content:'';width:4px;height:18px;background:var(--red);display:inline-block;flex-shrink:0;}
+
+.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.info-box{background:#f4f7fc;border:1px solid var(--border);padding:14px 16px;font-size:14px;}
+.info-box strong{display:block;font-size:13px;font-weight:700;color:var(--navy);margin-bottom:6px;}
+.info-box ul{padding-left:18px;}
+.info-box ul li{color:#555;margin-bottom:3px;line-height:1.6;}
+
+.emg-num{display:flex;gap:12px;flex-wrap:wrap;margin-top:14px;}
+.emg-badge{background:var(--red);color:#fff;padding:10px 18px;font-size:15px;font-weight:700;display:flex;align-items:center;gap:8px;}
+.emg-badge span{font-size:12px;font-weight:400;opacity:.85;}
+
+.guide-overview{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:28px;}
+.overview-btn{background:#fff;border:1px solid var(--border);border-top:3px solid var(--navy);padding:16px;cursor:pointer;text-align:center;transition:all .15s;}
+.overview-btn:hover{background:#eef2fb;border-top-color:var(--red);}
+.overview-btn .ov-icon{font-size:28px;margin-bottom:8px;}
+.overview-btn .ov-name{font-size:14px;font-weight:700;color:var(--navy);}
+.overview-btn .ov-tag{font-size:12px;color:#888;margin-top:3px;}
+
+
+/* ================================================
+   모바일 반응형 — 행안부 스타일 기준
+   768px 이하 모바일 | PC 레이아웃 그대로 유지
+   ================================================ */
+@media (max-width: 768px) {
+
+  /* 정부 최상단 바 축소 */
+  .govbar { height: 30px; }
+  .govbar-left { font-size: 12px; gap: 5px; }
+  .govbar-right { display: none; }
+  .govbar-inner { padding: 0 14px; }
+
+    /* 헤더 — 모바일: 돋보기 버튼 방식 */
+  .header-inner {
+    padding: 0 14px;
+    height: 52px;
+    flex-wrap: nowrap;
+    gap: 8px;
+    align-items: center;
+  }
+  .h-logo { min-width: 0; gap: 8px; flex: 1; }
+  .h-logo-mark { width: 34px; height: 34px; flex-shrink: 0; }
+  .h-logo-mark svg { width: 22px; height: 22px; }
+  .h-logo-texts strong { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px; }
+  .h-logo-texts span { display: none; }
+  .h-userinfo { flex-shrink: 0; display: flex; align-items: center; gap: 4px; margin-left: auto; }
+  .h-username { font-size: 12px; }
+  .btn-join, .btn-logout { font-size: 12px; padding: 5px 9px; border-radius: 4px; }
+
+
+  /* 네비게이션 — 2줄 3개씩 배치 */
+  .main-nav { height: auto; border-bottom: 3px solid var(--red); }
+  .main-nav-inner {
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    height: auto;
+    gap: 0;
+  }
+  .nav-item {
+    flex: none;
+    height: 44px;
+    font-size: 13px;
+    font-weight: 700;
+    border-right: 1px solid rgba(255,255,255,.12);
+    border-bottom: 1px solid rgba(255,255,255,.08);
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+  }
+  .nav-item:nth-child(3) { border-right: none; }
+  .nav-item:nth-child(4),
+  .nav-item:nth-child(5),
+  .nav-item:nth-child(6) { border-bottom: none; }
+  .nav-item:nth-child(6) { border-right: none; }
+
+  /* 긴급 재난 띠 */
+  .emg-strip .wrap { font-size: 12px; padding: 0 14px; gap: 8px; }
+  .emg-tag { font-size: 11px; padding: 2px 7px; white-space: nowrap; }
+
+  /* 페이지 히어로 */
+  .page-hero { padding: 18px 0; }
+  .page-hero-inner { padding: 0 14px; flex-direction: column; gap: 6px; }
+  .page-hero h1 { font-size: 20px; }
+  .page-hero p { font-size: 13px; }
+
+  /* 경로 바 */
+  .ptbar { padding: 8px 14px; }
+  .ptbar-inner { font-size: 12px; }
+
+  /* wrap */
+  .wrap { padding: 0 14px; }
+
+  /* 섹션 타이틀 */
+  .sec-ttl { font-size: 16px; padding: 14px 0 10px; }
+
+  /* 푸터 */
+  footer { padding: 16px 0; }
+  footer .wrap { flex-direction: column; gap: 6px; text-align: center; font-size: 12px; }
+  .ft-links { flex-wrap: wrap; justify-content: center; gap: 8px; }
+  .ft-links a { font-size: 12px; }
+
+  /* 공통 모달 */
+  .modal-bg .modal { width: 96vw !important; max-height: 90vh; overflow-y: auto; }
+  .modal-form { grid-template-columns: 1fr !important; }
+}
+
+@media (max-width: 768px) {
+  /* 국민행동요령 — 모바일 레이아웃 */
+
+  /* 좌측 사이드바 → 상단 칩 메뉴 */
+  .guide-layout {
+    flex-direction: column !important;
+    gap: 0;
+    padding: 0 0 40px;
+  }
+  .guide-sidebar {
+    width: 100% !important;
+    position: static !important;
+    padding: 12px 14px 6px;
+    background: #f5f7fa;
+    border-bottom: 1px solid #e0e6ef;
+  }
+  /* 사이드바 카드 배경 제거, 칩 컨테이너로 전환 */
+  .guide-nav-card {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    background: transparent;
+    border: none;
+    padding: 0;
+  }
+  .guide-nav-card h3 { display: none; }
+  .gnav-item {
+    display: inline-flex !important;
+    align-items: center;
+    gap: 5px;
+    padding: 7px 12px;
+    border-radius: 20px;
+    border: 1.5px solid #c8d2e8;
+    background: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    color: #333;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all .15s;
+  }
+  .gnav-item.active {
+    background: var(--navy);
+    color: #fff;
+    border-color: var(--navy);
+  }
+  .gnav-icon { font-size: 14px; }
+
+  /* 재난 개요 그리드 */
+  .guide-overview {
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+  .overview-btn {
+    padding: 12px 6px;
+    border-radius: 8px;
+    border-top-width: 3px;
+    cursor: pointer;
+  }
+  .overview-btn .ov-icon { font-size: 24px; margin-bottom: 5px; }
+  .overview-btn .ov-name { font-size: 12px; font-weight: 700; line-height: 1.3; }
+  .overview-btn .ov-tag { font-size: 10px; margin-top: 2px; color: #888; }
+
+  /* 콘텐츠 영역 */
+  .guide-main { width: 100%; padding: 14px 14px 0; }
+
+  /* 섹션 타이틀 */
+  .sec-ttl { font-size: 15px; padding: 10px 0 10px; }
+
+  /* 가이드 카드 */
+  .guide-card { border-radius: 8px; margin-bottom: 12px; overflow: hidden; }
+  .guide-card-head { padding: 12px 14px; gap: 8px; }
+  .guide-card-head .card-icon { font-size: 20px; }
+  .guide-card-head h3 { font-size: 14px; font-weight: 700; }
+  .guide-card-body { padding: 14px; }
+  .guide-card-body h4 { font-size: 14px; font-weight: 700; margin-bottom: 8px; color: var(--navy); }
+  .guide-card-body p { font-size: 13px; line-height: 1.8; margin-bottom: 8px; }
+  .guide-card-body li { font-size: 13px; line-height: 1.8; }
+  .guide-card-body ul, .guide-card-body ol { padding-left: 16px; margin-bottom: 8px; }
+
+  /* 단계별 박스 */
+  .step-box { display: flex; gap: 10px; padding: 10px 12px; margin-bottom: 8px; border-radius: 6px; align-items: flex-start; }
+  .step-num { font-size: 12px; min-width: 24px; height: 24px; flex-shrink: 0; }
+  .step-txt { font-size: 13px; line-height: 1.6; }
+
+  /* 경고/강조 박스 */
+  .warn-box { padding: 10px 12px; font-size: 13px; border-radius: 6px; line-height: 1.6; }
+  .tip-box { padding: 10px 12px; font-size: 13px; border-radius: 6px; }
+}
+
+</style>
+</head>
+<body>
+
+
+<!-- 정부 최상단 바 -->
+<div class="govbar">
+  <div class="govbar-inner">
+    <div class="govbar-left"><span class="taeguk"></span>이 누리집은 대한민국 공식 전자정부 누리집입니다.</div>
+    <div class="govbar-right"><a href="#">ENGLISH</a><span>|</span><a href="#">어린이</a><span>|</span><a href="#">사이트맵</a><span>|</span><a href="#">안내도우미</a></div>
+  </div>
+</div>
+
+<!-- 헤더 -->
+<header>
+  <div class="header-inner">
+    <a class="h-logo" href="index.html">
+      <div class="h-logo-mark"><svg viewBox="0 0 34 34" fill="none"><circle cx="17" cy="17" r="16" fill="#1d3461" stroke="#4a6fa5" stroke-width="1"/><path d="M17 5 A12 12 0 0 1 29 17 A12 12 0 0 0 17 5Z" fill="#c8102e" opacity=".85"/><path d="M17 29 A12 12 0 0 1 5 17 A12 12 0 0 0 17 29Z" fill="#c8102e" opacity=".85"/><circle cx="17" cy="17" r="4" fill="#fff"/></svg></div>
+      <div class="h-logo-texts"><strong>국민재난대피포털</strong><span>국민 재난 대피 안전 서비스</span></div>
+    </a>
+    <div class="h-userinfo" id="hdrUtil"></div>
+  </div>
+</header>
+
+<!-- 주메뉴 -->
+<nav class="main-nav">
+  <div class="main-nav-inner">
+    <a class="nav-item" href="dashboard.html">재난현황</a>
+    <a class="nav-item" href="shelter.html">대피소 찾기</a>
+    <a class="nav-item" href="alerts.html">재난문자</a>
+    <a class="nav-item" href="family.html">가족 찾기</a>
+    <a class="nav-item" href="checklist.html">재난 대비</a>
+    <a class="nav-item on" href="guide.html">국민행동요령</a>
+  </div>
+</nav>
+
+<!-- 긴급재난문자 띠 -->
+<div class="emg-strip" id="emgStrip">
+  <div class="wrap">
+    <span class="emg-tag">긴급재난문자</span>
+    <span><strong>[호우경보]</strong> 서울 강남·서초·송파구 호우경보 발효 — 지하 공간 이용 자제, 저지대 주민 즉시 대피 요망 (2026-04-09 09:32)</span>
+    <button class="emg-x" onclick="this.parentElement.parentElement.style.display='none'">✕</button>
+  </div>
+</div>
+
+<!-- 페이지 타이틀 -->
+<div class="ptbar">
+  <div class="ptbar-inner">
+    <a href="index.html">홈</a> &gt; <span class="curr">국민행동요령</span>
+  </div>
+</div>
+
+<!-- 히어로 -->
+<div class="page-hero">
+  <div class="page-hero-inner">
+    <div><h1>국민행동요령</h1><p>재난 유형별 올바른 대처 방법을 미리 숙지하고, 위기 상황에서 침착하게 행동하세요.</p></div>
+  </div>
+</div>
+
+<!-- 본문 -->
+<div class="wrap">
+<div class="guide-layout">
+
+  <!-- 좌측 메뉴 -->
+  <div class="guide-sidebar">
+    <div class="guide-nav-card">
+      <h3>재난 유형 선택</h3>
+      <div class="gnav-item active" onclick="showGuide('overview')"><span class="gnav-icon">📋</span>전체 보기</div>
+      <div class="gnav-item" onclick="showGuide('flood')"><span class="gnav-icon">🌊</span>홍수·태풍</div>
+      <div class="gnav-item" onclick="showGuide('quake')"><span class="gnav-icon">🌍</span>지진</div>
+      <div class="gnav-item" onclick="showGuide('fire')"><span class="gnav-icon">🔥</span>화재</div>
+      <div class="gnav-item" onclick="showGuide('landslide')"><span class="gnav-icon">⛰️</span>산사태·급경사</div>
+      <div class="gnav-item" onclick="showGuide('heat')"><span class="gnav-icon">☀️</span>폭염</div>
+      <div class="gnav-item" onclick="showGuide('cold')"><span class="gnav-icon">❄️</span>한파·대설</div>
+      <div class="gnav-item" onclick="showGuide('tsunami')"><span class="gnav-icon">🌊</span>지진해일(쓰나미)</div>
+      <div class="gnav-item" onclick="showGuide('cbrn')"><span class="gnav-icon">☢️</span>화생방</div>
+      <div class="gnav-item" onclick="showGuide('power')"><span class="gnav-icon">⚡</span>대규모 정전</div>
+      <div class="gnav-item" onclick="showGuide('infect')"><span class="gnav-icon">🦠</span>감염병 대유행</div>
+    </div>
+  </div>
+
+  <!-- 우측 내용 -->
+  <div class="guide-main">
+
+    <!-- 전체 보기 -->
+    <div id="sec-overview" class="guide-section active">
+      <div class="sec-ttl">재난 유형별 행동요령</div>
+      <div class="guide-overview">
+        <div class="overview-btn" onclick="showGuide('flood')"><div class="ov-icon">🌊</div><div class="ov-name">홍수·태풍</div><div class="ov-tag">기상재난</div></div>
+        <div class="overview-btn" onclick="showGuide('quake')"><div class="ov-icon">🌍</div><div class="ov-name">지진</div><div class="ov-tag">지질재난</div></div>
+        <div class="overview-btn" onclick="showGuide('fire')"><div class="ov-icon">🔥</div><div class="ov-name">화재</div><div class="ov-tag">생활안전</div></div>
+        <div class="overview-btn" onclick="showGuide('landslide')"><div class="ov-icon">⛰️</div><div class="ov-name">산사태</div><div class="ov-tag">지질재난</div></div>
+        <div class="overview-btn" onclick="showGuide('heat')"><div class="ov-icon">☀️</div><div class="ov-name">폭염</div><div class="ov-tag">기상재난</div></div>
+        <div class="overview-btn" onclick="showGuide('cold')"><div class="ov-icon">❄️</div><div class="ov-name">한파·대설</div><div class="ov-tag">기상재난</div></div>
+        <div class="overview-btn" onclick="showGuide('tsunami')"><div class="ov-icon">🌊</div><div class="ov-name">지진해일</div><div class="ov-tag">해양재난</div></div>
+        <div class="overview-btn" onclick="showGuide('cbrn')"><div class="ov-icon">☢️</div><div class="ov-name">화생방</div><div class="ov-tag">사회재난</div></div>
+        <div class="overview-btn" onclick="showGuide('power')"><div class="ov-icon">⚡</div><div class="ov-name">대규모 정전</div><div class="ov-tag">사회기반</div></div>
+        <div class="overview-btn" onclick="showGuide('infect')"><div class="ov-icon">🦠</div><div class="ov-name">감염병</div><div class="ov-tag">사회재난</div></div>
+      </div>
+      <div class="tip-box"><strong>TIP.</strong> 재난 발생 시 가장 먼저 해야 할 일: ① 침착하게 대피 여부 판단 → ② 재난문자·방송 청취 → ③ 가족 연락 → ④ 대피소 이동</div>
+      <div style="margin-top:20px;">
+        <div class="warn-box"><strong>긴급 신고번호</strong></div>
+        <div class="emg-num">
+          <div class="emg-badge">119 <span>소방·구조·구급</span></div>
+          <div class="emg-badge">112 <span>경찰</span></div>
+          <div class="emg-badge">110 <span>정부민원</span></div>
+          <div class="emg-badge">1588-3650 <span>재난안전상황실</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 홍수·태풍 -->
+    <div id="sec-flood" class="guide-section">
+      <div class="guide-card">
+        <div class="guide-card-head">
+          <span class="guide-card-icon">🌊</span>
+          <div><h2>홍수 · 태풍</h2><p>강풍과 집중호우로 인한 홍수, 침수, 강풍 피해 대처 요령</p></div>
+        </div>
+        <div class="guide-card-body">
+          <div class="sub-section">
+            <h3>예보 발령 시 (대피 전)</h3>
+            <div class="step-list">
+              <div class="step-item"><div class="step-num">1</div><div class="step-content"><strong>기상 정보 수시 확인</strong><p>기상청 재난문자, TV·라디오 방송, 국민재난안전포털을 통해 태풍 경로와 강도를 지속 모니터링합니다.</p></div></div>
+              <div class="step-item"><div class="step-num">2</div><div class="step-content"><strong>비상물품 사전 준비</strong><p>식수 3일분, 비상식량, 손전등, 보조배터리, 중요 서류를 방수 가방에 챙깁니다.</p></div></div>
+              <div class="step-item"><div class="step-num">3</div><div class="step-content"><strong>가스·전기 차단</strong><p>가스 밸브를 잠그고, 주 차단기를 내립니다. 하수구·배수구 역류 방지 마개를 설치합니다.</p></div></div>
+              <div class="step-item"><div class="step-num">4</div><div class="step-content"><strong>창문·유리 보강</strong><p>창문에 테이프를 X자로 붙여 강풍에 의한 유리 파손을 최소화합니다. 외부 물건은 실내로 이동.</p></div></div>
+            </div>
+          </div>
+          <div class="sub-section">
+            <h3>침수 발생 시 행동</h3>
+            <div class="step-list">
+              <div class="step-item"><div class="step-num">1</div><div class="step-content"><strong>즉시 고지대로 이동</strong><p>지하주차장, 지하철, 지하 상가는 즉시 탈출합니다. 절대로 잠수 차량에 탑승하지 않습니다.</p></div></div>
+              <div class="step-item"><div class="step-num">2</div><div class="step-content"><strong>전기 시설 접근 금지</strong><p>침수 지역의 맨홀, 전신주, 고압선 근처에 절대 접근하지 않습니다.</p></div></div>
+              <div class="step-item"><div class="step-num">3</div><div class="step-content"><strong>지하 공간 탈출</strong><p>지하에서 물이 갑자기 차오를 경우 문을 열 수 없을 때는 머리받침대 등으로 창문을 깨고 탈출합니다.</p></div></div>
+            </div>
+          </div>
+          <div class="tip-box"><strong>침수 차량 탈출법:</strong> 차량이 침수될 경우 수압이 평형이 되는 순간(물이 목까지 차오를 때) 문을 열거나, 유리를 깨고 탈출합니다. 창문은 전동식이 작동하는 동안 미리 열어두세요.</div>
+          <div class="warn-box"><strong>절대 금지:</strong> 급류를 건너거나 홍수 지역을 걷지 마세요. 발목 높이의 물도 쓰러질 수 있는 강한 흐름일 수 있습니다.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 지진 -->
+    <div id="sec-quake" class="guide-section">
+      <div class="guide-card">
+        <div class="guide-card-head">
+          <span class="guide-card-icon">🌍</span>
+          <div><h2>지진</h2><p>지진 발생 단계별 올바른 대피 요령</p></div>
+        </div>
+        <div class="guide-card-body">
+          <div class="sub-section">
+            <h3>진동이 느껴질 때 (실내)</h3>
+            <div class="step-list">
+              <div class="step-item"><div class="step-num">1</div><div class="step-content"><strong>즉시 책상/테이블 아래로</strong><p>튼튼한 테이블 아래로 들어가 머리와 목을 보호합니다. 없으면 방석이나 가방으로 머리를 감쌉니다.</p></div></div>
+              <div class="step-item"><div class="step-num">2</div><div class="step-content"><strong>가스·전기 차단</strong><p>흔들림이 멈추면 즉시 가스 밸브를 잠그고 전기 차단기를 내립니다.</p></div></div>
+              <div class="step-item"><div class="step-num">3</div><div class="step-content"><strong>문을 열어 출구 확보</strong><p>지진으로 문틀이 뒤틀려 문이 열리지 않을 수 있습니다. 흔들리는 중에 문을 열어둡니다.</p></div></div>
+              <div class="step-item"><div class="step-num">4</div><div class="step-content"><strong>엘리베이터 사용 금지</strong><p>지진이 멈춘 후 계단으로만 이동합니다.</p></div></div>
+            </div>
+          </div>
+          <div class="sub-section">
+            <h3>흔들림이 멈춘 후</h3>
+            <div class="step-list">
+              <div class="step-item"><div class="step-num">1</div><div class="step-content"><strong>건물 밖으로 대피</strong><p>넓은 공터나 공원으로 대피합니다. 담장, 간판, 건물 외벽 근처는 피합니다.</p></div></div>
+              <div class="step-item"><div class="step-num">2</div><div class="step-content"><strong>여진 대비</strong><p>본진 이후 여진이 발생할 수 있습니다. 안전한 장소에서 대기하며 공식 정보를 청취합니다.</p></div></div>
+              <div class="step-item"><div class="step-num">3</div><div class="step-content"><strong>해안가 쓰나미 주의</strong><p>해안 근처에서 지진이 발생하면 즉시 고지대로 이동합니다.</p></div></div>
+            </div>
+          </div>
+          <div class="info-grid">
+            <div class="info-box"><strong>규모별 영향</strong><ul><li>규모 2.0 미만: 거의 감지 못함</li><li>규모 3.0~4.0: 실내 진동 감지</li><li>규모 5.0~6.0: 피해 가능성</li><li>규모 7.0 이상: 대규모 피해</li></ul></div>
+            <div class="info-box"><strong>대피 장소 우선순위</strong><ul><li>1순위: 내진 설계된 건물 내부</li><li>2순위: 넓은 공원, 운동장</li><li>3순위: 산이나 언덕 (산사태 주의)</li></ul></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 화재 -->
+    <div id="sec-fire" class="guide-section">
+      <div class="guide-card">
+        <div class="guide-card-head">
+          <span class="guide-card-icon">🔥</span>
+          <div><h2>화재</h2><p>화재 발견 시 초기 대응부터 대피까지</p></div>
+        </div>
+        <div class="guide-card-body">
+          <div class="sub-section">
+            <h3>화재 발견 즉시</h3>
+            <div class="step-list">
+              <div class="step-item"><div class="step-num">1</div><div class="step-content"><strong>"불이야!" 외치며 119 신고</strong><p>주소, 화재 규모, 부상자 여부를 침착하게 알립니다. 소화기를 이용한 초기 진화는 불길이 작을 때만 시도합니다.</p></div></div>
+              <div class="step-item"><div class="step-num">2</div><div class="step-content"><strong>연기가 있으면 낮은 자세로 대피</strong><p>연기는 위로 올라가므로 바닥에 가깝게 기어서 대피합니다. 젖은 수건으로 코와 입을 막습니다.</p></div></div>
+              <div class="step-item"><div class="step-num">3</div><div class="step-content"><strong>엘리베이터 절대 사용 금지</strong><p>계단을 이용합니다. 계단에 연기가 찬 경우 옥상으로 대피 후 구조 요청합니다.</p></div></div>
+              <div class="step-item"><div class="step-num">4</div><div class="step-content"><strong>문을 닫고 대피</strong><p>문을 닫으면 산소 공급을 차단하여 연소 속도를 늦출 수 있습니다. 열린 문은 닫고 나갑니다.</p></div></div>
+            </div>
+          </div>
+          <div class="sub-section">
+            <h3>탈출이 불가능한 경우</h3>
+            <div class="step-list">
+              <div class="step-item"><div class="step-num">1</div><div class="step-content"><strong>문 틈새 막기</strong><p>수건, 옷 등으로 문 아래 틈새를 막아 연기가 들어오는 것을 차단합니다.</p></div></div>
+              <div class="step-item"><div class="step-num">2</div><div class="step-content"><strong>창문으로 구조 신호</strong><p>창문을 열고 옷이나 이불을 흔들어 위치를 알립니다. 119에 현재 위치와 상황을 전달합니다.</p></div></div>
+            </div>
+          </div>
+          <div class="warn-box"><strong>절대 금지:</strong> 연기가 가득 찬 계단을 통해 하향 대피 시도, 탈 것을 다시 가지러 돌아가기, 엘리베이터 이용</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 산사태 -->
+    <div id="sec-landslide" class="guide-section">
+      <div class="guide-card">
+        <div class="guide-card-head">
+          <span class="guide-card-icon">⛰️</span>
+          <div><h2>산사태 · 급경사지 붕괴</h2><p>집중호우 또는 지진 후 산사태 위험 대처 요령</p></div>
+        </div>
+        <div class="guide-card-body">
+          <div class="sub-section">
+            <h3>위험 징후</h3>
+            <div class="info-grid">
+              <div class="info-box"><strong>산사태 전조증상</strong><ul><li>산에서 갑자기 물소리가 커짐</li><li>땅이 울리는 소리</li><li>나무가 흔들리거나 쓰러짐</li><li>산비탈에서 물이 솟아오름</li></ul></div>
+              <div class="info-box"><strong>고위험 상황</strong><ul><li>시간당 30mm 이상 집중호우</li><li>누적 강수량 150mm 이상</li><li>규모 5.0 이상 지진 발생 후</li></ul></div>
+            </div>
+          </div>
+          <div class="sub-section">
+            <h3>대피 요령</h3>
+            <div class="step-list">
+              <div class="step-item"><div class="step-num">1</div><div class="step-content"><strong>즉시 산 반대편으로 이동</strong><p>산사태 방향과 수직으로 피하는 것이 가장 효과적입니다. 절대 산 쪽을 향해 도망치지 않습니다.</p></div></div>
+              <div class="step-item"><div class="step-num">2</div><div class="step-content"><strong>낮은 건물, 지하실 접근 금지</strong><p>산 아래쪽에 위치한 낮은 건물은 매몰 위험이 있습니다.</p></div></div>
+              <div class="step-item"><div class="step-num">3</div><div class="step-content"><strong>매몰 시 구조 신호</strong><p>소리치거나 호루라기로 위치를 알립니다. 손가락이나 손을 내밀어 구조대원에게 위치를 알립니다.</p></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 폭염 -->
+    <div id="sec-heat" class="guide-section">
+      <div class="guide-card">
+        <div class="guide-card-head">
+          <span class="guide-card-icon">☀️</span>
+          <div><h2>폭염</h2><p>33°C 이상 고온이 지속될 때의 건강 보호 요령</p></div>
+        </div>
+        <div class="guide-card-body">
+          <div class="sub-section">
+            <h3>폭염 경보 시 행동</h3>
+            <div class="step-list">
+              <div class="step-item"><div class="step-num">1</div><div class="step-content"><strong>낮 12~17시 외출 자제</strong><p>가장 더운 시간대에는 외출을 피하고 시원한 실내에 머뭅니다. 불가피한 경우 모자, 양산, 긴 소매 착용.</p></div></div>
+              <div class="step-item"><div class="step-num">2</div><div class="step-content"><strong>충분한 수분 섭취</strong><p>목이 마르지 않아도 1~2시간마다 물 한 컵씩 마십니다. 카페인·알코올 음료는 탈수를 촉진합니다.</p></div></div>
+              <div class="step-item"><div class="step-num">3</div><div class="step-content"><strong>노인·어린이 상태 수시 확인</strong><p>취약계층은 열사병에 더 취약합니다. 주기적으로 연락하고 무더위 쉼터로 안내합니다.</p></div></div>
+              <div class="step-item"><div class="step-num">4</div><div class="step-content"><strong>열사병 의심 시 119 신고</strong><p>체온 40°C 이상, 의식 혼미, 피부가 뜨겁고 건조할 때는 즉시 119 신고 후 시원한 곳으로 이동합니다.</p></div></div>
+            </div>
+          </div>
+          <div class="tip-box"><strong>열사병 응급처치:</strong> 서늘한 곳으로 이동 → 찬 물이나 얼음으로 몸을 식힘 → 목, 겨드랑이, 사타구니에 얼음 팩 → 의식 있으면 찬 음료 제공 → 119 신고</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 한파·대설 -->
+    <div id="sec-cold" class="guide-section">
+      <div class="guide-card">
+        <div class="guide-card-head">
+          <span class="guide-card-icon">❄️</span>
+          <div><h2>한파 · 대설</h2><p>영하 15°C 이하 한파 및 폭설 시 안전 요령</p></div>
+        </div>
+        <div class="guide-card-body">
+          <div class="sub-section">
+            <h3>한파 대비</h3>
+            <div class="step-list">
+              <div class="step-item"><div class="step-num">1</div><div class="step-content"><strong>내복·방한용품 착용</strong><p>목, 손목, 발목 등 신체 말단 부위를 따뜻하게 유지합니다. 여러 겹 입는 것이 효과적입니다.</p></div></div>
+              <div class="step-item"><div class="step-num">2</div><div class="step-content"><strong>수도 동파 방지</strong><p>수도꼭지에서 물을 실처럼 얇게 틀어놓거나, 파이프에 보온재를 감습니다.</p></div></div>
+              <div class="step-item"><div class="step-num">3</div><div class="step-content"><strong>저체온증·동상 주의</strong><p>체온이 35°C 아래로 떨어지면 저체온증입니다. 따뜻한 물로 서서히 체온을 올리고 119 신고.</p></div></div>
+            </div>
+          </div>
+          <div class="sub-section">
+            <h3>대설 시 행동</h3>
+            <div class="step-list">
+              <div class="step-item"><div class="step-num">1</div><div class="step-content"><strong>외출 자제 및 차량 운행 금지</strong><p>눈길·빙판길 낙상 및 교통사고 위험이 높습니다. 불가피한 외출 시 미끄럼 방지 신발 착용.</p></div></div>
+              <div class="step-item"><div class="step-num">2</div><div class="step-content"><strong>지붕·처마 적설 확인</strong><p>많은 눈이 쌓이면 건물 붕괴 위험이 있습니다. 조기 제설 작업을 실시합니다.</p></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 쓰나미 -->
+    <div id="sec-tsunami" class="guide-section">
+      <div class="guide-card">
+        <div class="guide-card-head">
+          <span class="guide-card-icon">🌊</span>
+          <div><h2>지진해일 (쓰나미)</h2><p>해안가 지역 지진해일 대피 요령</p></div>
+        </div>
+        <div class="guide-card-body">
+          <div class="sub-section">
+            <h3>즉시 대피 신호</h3>
+            <div class="info-grid">
+              <div class="info-box"><strong>쓰나미 전조현상</strong><ul><li>해안가에서 강한 지진 감지</li><li>바닷물이 갑자기 빠져나감</li><li>해안에서 이상한 소음 발생</li><li>지진해일 경보 발령</li></ul></div>
+              <div class="info-box"><strong>대피 기준선</strong><ul><li>해안에서 3km 이내: 즉시 대피</li><li>해발 10m 이상으로 이동</li><li>경보 해제 전 복귀 금지</li></ul></div>
+            </div>
+          </div>
+          <div class="sub-section">
+            <h3>대피 행동 요령</h3>
+            <div class="step-list">
+              <div class="step-item"><div class="step-num">1</div><div class="step-content"><strong>즉시 높은 곳으로 이동</strong><p>걸어서 갈 수 있는 최고 지대나 내진 설계된 고층 건물 3층 이상으로 대피합니다.</p></div></div>
+              <div class="step-item"><div class="step-num">2</div><div class="step-content"><strong>차량 이동은 조기에</strong><p>도로가 막히기 전에 이동합니다. 이미 막혔다면 차량을 버리고 도보 대피합니다.</p></div></div>
+              <div class="step-item"><div class="step-num">3</div><div class="step-content"><strong>공식 해제 전 복귀 금지</strong><p>쓰나미는 여러 번 파도가 올 수 있습니다. 기상청·재난안전청의 공식 해제 발표 후 복귀합니다.</p></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 화생방 -->
+    <div id="sec-cbrn" class="guide-section">
+      <div class="guide-card">
+        <div class="guide-card-head">
+          <span class="guide-card-icon">☢️</span>
+          <div><h2>화생방 (CBRN) 대응</h2><p>화학·생물·방사능·핵 위협 대처 요령</p></div>
+        </div>
+        <div class="guide-card-body">
+          <div class="sub-section">
+            <h3>화생방 경보 발령 시</h3>
+            <div class="step-list">
+              <div class="step-item"><div class="step-num">1</div><div class="step-content"><strong>방독면·방호복 착용</strong><p>비상용 방독면이 있으면 즉시 착용합니다. 없으면 물에 적신 수건으로 코·입을 막습니다.</p></div></div>
+              <div class="step-item"><div class="step-num">2</div><div class="step-content"><strong>밀폐 공간 대피</strong><p>창문과 문을 모두 닫고 테이프로 틈새를 막습니다. 에어컨·환풍기·난방기를 모두 끕니다.</p></div></div>
+              <div class="step-item"><div class="step-num">3</div><div class="step-content"><strong>오염 물질 접촉 시</strong><p>즉시 옷을 벗고 다량의 물로 피부를 씻어냅니다. 눈을 비비지 않습니다.</p></div></div>
+              <div class="step-item"><div class="step-num">4</div><div class="step-content"><strong>방사능 오염 시 추가 행동</strong><p>야외 활동 금지, 빗물 노출 금지, 식수는 밀폐 병수 사용, 요오드화칼륨(KI) 복용은 당국 지시에 따릅니다.</p></div></div>
+            </div>
+          </div>
+          <div class="warn-box"><strong>중요:</strong> 화생방 대응은 반드시 당국의 지시에 따라야 합니다. 자의적 판단으로 오염 지역에 접근하지 마세요.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 대규모 정전 -->
+    <div id="sec-power" class="guide-section">
+      <div class="guide-card">
+        <div class="guide-card-head">
+          <span class="guide-card-icon">⚡</span>
+          <div><h2>대규모 정전 (블랙아웃)</h2><p>장시간 광역 정전 시 생존 및 대처 요령</p></div>
+        </div>
+        <div class="guide-card-body">
+          <div class="sub-section">
+            <h3>즉시 대응 행동</h3>
+            <div class="step-list">
+              <div class="step-item"><div class="step-num">1</div><div class="step-content"><strong>손전등·보조배터리 꺼내기</strong><p>평소 비상용품 위치를 미리 파악해 두어야 합니다. 촛불보다 손전등이 화재 위험이 낮습니다.</p></div></div>
+              <div class="step-item"><div class="step-num">2</div><div class="step-content"><strong>라디오로 상황 파악</strong><p>건전지식 라디오로 재난 방송을 청취합니다. 인터넷, TV는 사용 불가할 수 있습니다.</p></div></div>
+              <div class="step-item"><div class="step-num">3</div><div class="step-content"><strong>의료 기기 사용자 주의</strong><p>산소호흡기, 투석기 등 전원이 필요한 의료기기 사용자는 즉시 119 또는 병원에 연락합니다.</p></div></div>
+              <div class="step-item"><div class="step-num">4</div><div class="step-content"><strong>냉장고 음식 관리</strong><p>냉장고 문을 최대한 열지 않습니다. 4시간까지는 냉장 유지 가능. 12시간 이상 시 냉장 식품 폐기 고려.</p></div></div>
+            </div>
+          </div>
+          <div class="tip-box"><strong>발전기 사용 시 주의:</strong> 가정용 발전기는 반드시 실외에서 사용합니다. 실내 사용 시 일산화탄소 중독으로 사망할 수 있습니다.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 감염병 -->
+    <div id="sec-infect" class="guide-section">
+      <div class="guide-card">
+        <div class="guide-card-head">
+          <span class="guide-card-icon">🦠</span>
+          <div><h2>감염병 대유행 (팬데믹)</h2><p>신종 감염병 유행 시 개인·가족 보호 요령</p></div>
+        </div>
+        <div class="guide-card-body">
+          <div class="sub-section">
+            <h3>감염 예방 행동</h3>
+            <div class="step-list">
+              <div class="step-item"><div class="step-num">1</div><div class="step-content"><strong>올바른 손씻기</strong><p>비누로 30초 이상 손을 씻습니다. 흐르는 물이 없을 때는 알코올 손 소독제를 사용합니다.</p></div></div>
+              <div class="step-item"><div class="step-num">2</div><div class="step-content"><strong>마스크 착용</strong><p>밀폐 공간, 다중이용시설, 의료기관에서는 KF94 이상 마스크를 착용합니다.</p></div></div>
+              <div class="step-item"><div class="step-num">3</div><div class="step-content"><strong>사회적 거리두기 준수</strong><p>당국의 거리두기 단계별 지침을 준수합니다. 증상 발현 시 즉시 자가격리합니다.</p></div></div>
+              <div class="step-item"><div class="step-num">4</div><div class="step-content"><strong>예방접종 적극 참여</strong><p>보건당국이 권고하는 예방접종을 기간 내에 완료합니다.</p></div></div>
+            </div>
+          </div>
+          <div class="sub-section">
+            <h3>의심 증상 발현 시</h3>
+            <div class="step-list">
+              <div class="step-item"><div class="step-num">1</div><div class="step-content"><strong>질병청 콜센터(1339) 상담</strong><p>의료기관 방문 전 반드시 전화 상담 후 이동 방법을 안내받습니다.</p></div></div>
+              <div class="step-item"><div class="step-num">2</div><div class="step-content"><strong>자가격리 수칙 준수</strong><p>별도 방 사용, 전용 화장실, 가족과 식사 분리, 외출 자제.</p></div></div>
+            </div>
+          </div>
+          <div class="emg-num" style="margin-top:0;">
+            <div class="emg-badge" style="background:#1a7f3c;">1339 <span>질병관리청 콜센터</span></div>
+            <div class="emg-badge" style="background:#0077cc;">129 <span>보건복지 콜센터</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- guide-main -->
+</div><!-- guide-layout -->
+</div><!-- wrap -->
+
+<footer>
+  <div class="wrap">
+    <span>© 2026 행정안전부 국민재난대피포털. All rights reserved.</span>
+    <div class="ft-links">
+      <a href="#">개인정보처리방침</a>
+      <a href="#">이용약관</a>
+      <a href="#">접근성 안내</a>
+      <a href="#">사이트맵</a>
+    </div>
+  </div>
+</footer>
+
+<!-- 로그인 모달 -->
+<div class="login-modal-bg" id="loginModalBg" onclick="if(event.target===this)closeLoginModal()">
+  <div class="login-modal">
+    <div class="lc-top">
+      <h2>로그인</h2>
+      <button class="login-modal-close" onclick="closeLoginModal()">✕</button>
+    </div>
+    <div class="lc-switch-wrap">
+      <div class="lc-methods" id="modalMethods">
+        <div class="lc-method" onclick="alert('공동인증서(구 공인인증서) 및 금융인증서로 로그인합니다.\n(데모: 아이디 로그인을 이용해주세요)')">
+          <div class="lc-icon-box icon-cert"></div>
+          <span class="lc-method-name">공동·금융인증</span>
+        </div>
+        <div class="lc-method" onclick="alert('카카오·네이버·PASS 간편인증으로 로그인합니다.\n(데모: 아이디 로그인을 이용해주세요)')">
+          <div class="lc-icon-box icon-simple"></div>
+          <span class="lc-method-name">간편인증</span>
+        </div>
+        <div class="lc-method" onclick="showIdLoginModal()">
+          <div class="lc-icon-box icon-id"></div>
+          <span class="lc-method-name">아이디 로그인</span>
+        </div>
+      </div>
+      <div class="lc-id-form" id="modalIdForm">
+        <button class="btn-back-login" onclick="backToMethodsModal()">← 다른 방법으로 로그인</button>
+        <div class="lf-err" id="modalErr">아이디 또는 비밀번호가 올바르지 않습니다.</div>
+        <div class="lf-row"><input type="text" id="modalId" placeholder="아이디" onkeydown="if(event.key==='Enter')doModalLogin()"></div>
+        <div class="lf-row"><input type="password" id="modalPw" placeholder="비밀번호" onkeydown="if(event.key==='Enter')doModalLogin()"></div>
+        <button class="btn-lc-do" onclick="doModalLogin()">로그인</button>
+        <div class="lc-id-links"><a href="#">아이디 찾기</a><a href="#">비밀번호 찾기</a></div>
+      </div>
+    </div>
+    <button class="btn-other-login" onclick="alert('공동인증서·카카오·네이버 간편인증 등 다양한 로그인을 지원합니다.')">다른 로그인 안내</button>
+  </div>
+</div>
+
+<script>
+const SECTIONS = ['overview','flood','quake','fire','landslide','heat','cold','tsunami','cbrn','power','infect'];
+
+function showGuide(id){
+  SECTIONS.forEach(s=>{
+    document.getElementById('sec-'+s).classList.remove('active');
+  });
+  document.getElementById('sec-'+id).classList.add('active');
+  document.querySelectorAll('.gnav-item').forEach(el=>{
+    el.classList.remove('active');
+    if(el.getAttribute('onclick')===`showGuide('${id}')`) el.classList.add('active');
+  });
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+const hash = location.hash.replace('#','');
+if(hash && SECTIONS.includes(hash)) showGuide(hash);
+
+// [더미] 백엔드 연결 시 제거 — POST /api/auth/login 응답으로 대체
+const ADMINS={manager:'manager1234',admin2:'admin2024'};
+const ANAMES={manager:'김담당 (재난관리팀)',admin2:'이운영 (시설관리팀)'};
+
+function openLoginModal(){document.getElementById('loginModalBg').classList.add('open');}
+function closeLoginModal(){document.getElementById('loginModalBg').classList.remove('open');}
+function showIdLoginModal(){document.getElementById('modalMethods').style.display='none';document.getElementById('modalIdForm').classList.add('show');}
+function backToMethodsModal(){document.getElementById('modalMethods').style.display='';document.getElementById('modalIdForm').classList.remove('show');}
+function doModalLogin(){
+  const id=document.getElementById('modalId').value.trim();
+  const pw=document.getElementById('modalPw').value;
+  if(!id||!pw){alert('아이디와 비밀번호를 입력하세요.');return;}
+  if(ADMINS[id]===pw){sessionStorage.setItem('adminLoggedIn','true');sessionStorage.setItem('adminId',id);sessionStorage.setItem('adminName',ANAMES[id]||id);window.location.href='admin.html';return;}
+  if(pw.length>=4){sessionStorage.setItem('user',JSON.stringify({name:'김안전',phone:id}));location.reload();} // [더미] 실제 로그인 사용자 정보로 교체
+  else{document.getElementById('modalErr').classList.add('show');}
+}
+function initHeader(){
+  const raw=sessionStorage.getItem('user');
+  const el=document.getElementById('hdrUtil');
+  if(!el)return;
+  if(raw){try{const u=JSON.parse(raw);el.innerHTML=`<span class="h-username">${u.name||'사용자'} 님</span><button class="btn-join" onclick="location.href='mypage.html'">마이페이지</button><button class="btn-logout" onclick="sessionStorage.clear();location.reload()">로그아웃</button>`;}catch(e){}}
+  else{el.innerHTML=`<button class="btn-login-h" onclick="openLoginModal()">로그인</button><button class="btn-join" onclick="location.href='signup.html'">회원가입</button>`;}
+}
+function hdrSearch(){const q=document.getElementById('hdrSrch').value.trim();if(q)alert(`"${q}" 검색 기능은 준비 중입니다.`);}
+initHeader();
+
+
+</script>
+</body>
+</html>
