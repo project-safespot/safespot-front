@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>로그인 - 국민재난대피포털</title>
 <link rel="stylesheet" href="_common.css">
+<script src="config.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/api-client.js"></script>
 <style>
 .login-page-bg{background:var(--bg);min-height:calc(100vh - 230px);display:flex;align-items:center;justify-content:center;padding:48px 16px;}
 .login-card{background:#fff;border-radius:16px;box-shadow:0 4px 24px rgba(0,0,0,.10);padding:32px 32px 28px;border:1px solid #eef0f6;width:100%;max-width:420px;}
@@ -252,56 +255,79 @@
 </footer>
 
 <script>
-// [더미] 백엔드 연결 시 제거 — POST /api/auth/login 응답으로 대체
-const ADMINS={manager:'manager1234',admin2:'admin2024'};
-const ANAMES={manager:'김담당 (재난관리팀)',admin2:'이운영 (시설관리팀)'};
+/* mock-only admin credentials — removed when real API is wired */
+const ADMINS = { manager: 'manager1234', admin2: 'admin2024' };
+const ANAMES = { manager: '김담당 (재난관리팀)', admin2: '이운영 (시설관리팀)' };
 
-function initHeader(){
-  const raw=sessionStorage.getItem('user');
-  const el=document.getElementById('hdrUtil');
-  if(!el)return;
-  if(raw){
-    try{
-      const u=JSON.parse(raw);
-      el.innerHTML=`<span class="h-username">${u.name||'사용자'} 님</span><button class="btn-logout" onclick="sessionStorage.clear();location.href='index.html'">로그아웃</button>`;
-    }catch(e){}
+(function initHeader() {
+  var u = SafeSpotAuth.getUser();
+  var el = document.getElementById('hdrUtil');
+  if (!el) return;
+  if (u) {
+    el.innerHTML = '<span class="h-username">' + (u.name || '사용자') + ' 님</span>' +
+      '<button class="btn-logout" onclick="SafeSpotAuth.logout();location.href=\'index.html\'">로그아웃</button>';
   }
-}
-function hdrSearch(){const q=document.getElementById('hdrSrch').value.trim();if(q)alert(`"${q}" 검색 기능은 준비 중입니다.`);}
-initHeader();
+})();
 
-function showIdLogin(){
-  document.getElementById('lcMethods').style.display='none';
+function showIdLogin() {
+  document.getElementById('lcMethods').style.display = 'none';
   document.getElementById('idLoginForm').classList.add('show');
 }
-function backToMethods(){
-  document.getElementById('lcMethods').style.display='';
+function backToMethods() {
+  document.getElementById('lcMethods').style.display = '';
   document.getElementById('idLoginForm').classList.remove('show');
 }
-function showOther(type){
-  if(type==='cert') alert('공동인증서(구 공인인증서) 및 금융인증서로 로그인합니다.\n(데모: 아이디 로그인을 이용해주세요)');
+function showOther(type) {
+  if (type === 'cert') alert('공동인증서(구 공인인증서) 및 금융인증서로 로그인합니다.\n(데모: 아이디 로그인을 이용해주세요)');
   else alert('카카오·네이버·PASS 간편인증으로 로그인합니다.\n(데모: 아이디 로그인을 이용해주세요)');
 }
-function doLogin(){
-  const id=document.getElementById('lcId').value.trim();
-  const pw=document.getElementById('lcPw').value;
-  if(!id||!pw){alert('아이디와 비밀번호를 입력하세요.');return;}
-  if(ADMINS[id]===pw){
-    sessionStorage.setItem('adminLoggedIn','true');
-    sessionStorage.setItem('adminId',id);
-    sessionStorage.setItem('adminName',ANAMES[id]||id);
-    window.location.href='admin.html';
+
+async function doLogin() {
+  var id = document.getElementById('lcId').value.trim();
+  var pw = document.getElementById('lcPw').value;
+  if (!id || !pw) { alert('아이디와 비밀번호를 입력하세요.'); return; }
+
+  var errEl = document.getElementById('lcErr');
+  errEl.classList.remove('show');
+
+  if (window.SAFESPOT_CONFIG.apiMode === 'real') {
+    try {
+      var json = await SafeSpotApi.request({
+        service: 'core',
+        path: '/auth/login',
+        method: 'POST',
+        body: { loginId: id, password: pw }
+      });
+      if (!json.success) { errEl.classList.add('show'); return; }
+      var data = json.data;
+      SafeSpotAuth.setSession(data.accessToken, {
+        userId: data.user.userId,
+        role: data.user.role,
+        name: data.user.name
+      });
+      window.location.href = data.user.role === 'ADMIN' ? 'admin.html' : 'index.html';
+    } catch (e) {
+      errEl.textContent = e.status === 401
+        ? '아이디 또는 비밀번호가 올바르지 않습니다.'
+        : '서버 오류가 발생했습니다. 잠시 후 다시 시도하세요.';
+      errEl.classList.add('show');
+    }
     return;
   }
-  if(pw.length>=4){
-    sessionStorage.setItem('user',JSON.stringify({name:'김안전',phone:id}));
-    window.location.href='index.html';
+
+  /* mock mode */
+  if (ADMINS[id] === pw) {
+    SafeSpotAuth.setSession('mock-admin-token', { userId: 0, role: 'ADMIN', name: ANAMES[id] || id });
+    window.location.href = 'admin.html';
+    return;
+  }
+  if (pw.length >= 4) {
+    SafeSpotAuth.setSession('mock-user-token', { userId: 1, role: 'USER', name: '김안전' });
+    window.location.href = 'index.html';
   } else {
-    document.getElementById('lcErr').classList.add('show');
+    errEl.classList.add('show');
   }
 }
-
-
 </script>
 </body>
 </html>

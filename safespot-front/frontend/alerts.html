@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>재난문자 - 국민재난대피포털</title>
 <link rel="stylesheet" href="_common.css">
+<script src="config.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/api-client.js"></script>
 <style>
 /* page-hero defined in _common.css */
 
@@ -383,7 +386,7 @@
 </footer>
 
 <script>
-const ALERTS = [
+const MOCK_ALERTS = [
   {id:1,lv:'disaster',type:'재난위기경보',region:'서울 강남구',time:'2026-04-09 09:32',sender:'행정안전부',isNew:true,
    text:'[호우경보] 서울 강남구 일대 호우경보 발효. 지하 공간 이용 즉시 자제, 저지대 주민 대피소로 이동 바랍니다.',
    detail:{발송기관:'행정안전부 국가재난안전관리본부',수신지역:'서울특별시 강남구 전 지역',재난유형:'호우',경보단계:'경보',대피소:'강남구민회관, 역삼동 주민센터, 대치동 주민센터',행동요령:'지하 공간 즉시 대피, 하천변 접근 금지, 차량 이동 자제'}},
@@ -431,9 +434,9 @@ const ALERTS = [
    detail:{발송기관:'행정안전부 국가재난안전관리본부',수신지역:'서울특별시 강북구',재난유형:'집중호우',경보단계:'경보',대피소:'강북구청, 수유 주민센터',행동요령:'우이천 인근 즉시 대피, 지하 공간 접근 금지'}},
 ];
 
-// 서울시 재난만 표시
-// [더미] ALERTS → GET /api/disaster-alerts?region=서울특별시 응답으로 교체
-let filtered = ALERTS.filter(a => a.region.toLowerCase().includes('서울'));
+let ALERTS = (window.SafeSpotConfig && window.SafeSpotConfig.isMockMode()) ? MOCK_ALERTS.slice() : [];
+
+var filtered = [];
 
 const lvClass = {disaster:'lv-disaster',warning:'lv-warning',info:'lv-info',safe:'lv-safe'};
 
@@ -476,22 +479,65 @@ function showDetail(id){
   document.getElementById('alertModal').classList.add('open');
 }
 
-/* ── TODO: 백엔드 연결 시 목 데이터(ALERTS) 대신 API 호출로 교체 ──
-async function loadAlertsFromAPI() {
-  // GET /api/disaster-alerts?region=서울특별시
-  try {
-    const res = await fetch(API_BASE + '/disaster-alerts?region=' + encodeURIComponent('서울특별시'), {
-      headers: { 'Authorization': 'Bearer ' + (sessionStorage.getItem('accessToken')||'') }
-    });
-    const json = await res.json();
-    if(json.success) {
-      filtered = json.data.items;
-      renderAlerts();
-      updateStats();
+// DisasterAlertItem DTO → UI alert object
+// Backend fields: alertId, level (DISASTER|WARNING|INFO|SAFE), disasterType, region, message, issuedAt, expiredAt
+function mapAlert(a) {
+  var LEVEL_KO  = { DISASTER: '재난위기경보', WARNING: '호우·강풍 특보', INFO: '안전 안내', SAFE: '해제·정상화' };
+  var DTYPE_KO  = { EARTHQUAKE: '지진', FLOOD: '홍수', LANDSLIDE: '산사태' };
+  var lvKey = (a.level || '').toUpperCase();
+  var lv    = { DISASTER: 'disaster', WARNING: 'warning', INFO: 'info', SAFE: 'safe' }[lvKey] || 'info';
+  return {
+    id:     a.alertId,
+    lv:     lv,
+    type:   LEVEL_KO[lvKey] || a.level || '',
+    region: a.region || '',
+    time:   a.issuedAt || '',
+    sender: '',
+    isNew:  false,
+    text:   a.message || '',
+    detail: {
+      발송기관: '',
+      수신지역: a.region || '',
+      재난유형: DTYPE_KO[a.disasterType] || a.disasterType || '',
+      경보단계: LEVEL_KO[lvKey] || a.level || '',
+      대피소:   '',
+      행동요령: ''
     }
-  } catch(e) { console.warn('API 연결 실패, 목 데이터 사용:', e.message); }
+  };
 }
-── 목 데이터 fallback 끝 ── */
+
+async function initAlerts() {
+  if(window.SafeSpotConfig && window.SafeSpotConfig.isRealMode()) {
+    var strip=document.getElementById('emgStrip');
+    if(strip) strip.style.display='none';
+  }
+  if(window.SAFESPOT_CONFIG.apiMode !== 'real') {
+    filtered = ALERTS.filter(function(a){ return a.region.includes('서울'); });
+    renderAlerts();
+    updateStats();
+    return;
+  }
+  // Clear mock data immediately — real mode must not serve mock content on API failure
+  ALERTS = [];
+  filtered = [];
+  try {
+    var json = await SafeSpotApi.request({ service: 'public', path: '/disaster-alerts', method: 'GET' });
+    if(!json.success) throw new Error((json.error && json.error.message) || 'SERVER_ERROR');
+    ALERTS = ((json.data && json.data.items) || []).map(mapAlert);
+    filtered = ALERTS.slice();
+    renderAlerts();
+    updateStats();
+  } catch(e) {
+    document.getElementById('alertList').innerHTML =
+      '<div style="text-align:center;padding:40px;color:#c00;font-size:15px;background:#fff;border:1px solid var(--border);">' +
+      '재난문자 정보를 불러올 수 없습니다.<br>' +
+      '<span style="font-size:13px;color:#888;">잠시 후 다시 시도해 주세요.</span></div>';
+    document.getElementById('alertCount').innerHTML = '<strong>0개</strong> 문자 표시 중';
+    ['cntDisaster', 'cntWarning', 'cntInfo', 'cntSafe'].forEach(function(elId) {
+      document.getElementById(elId).textContent = '0';
+    });
+  }
+}
 
 function applyFilter(){
   const kw = document.getElementById('kw').value.trim().toLowerCase();
@@ -529,24 +575,43 @@ function closeLoginModal(){document.getElementById('loginModalBg').classList.rem
 function showIdLoginModal(){document.getElementById('modalMethods').style.display='none';document.getElementById('modalIdForm').classList.add('show');}
 function backToMethodsModal(){document.getElementById('modalMethods').style.display='';document.getElementById('modalIdForm').classList.remove('show');}
 function doModalLogin(){
-  const id=document.getElementById('modalId').value.trim();
-  const pw=document.getElementById('modalPw').value;
-  if(!id||!pw){alert('아이디와 비밀번호를 입력하세요.');return;}
-  if(ADMINS[id]===pw){sessionStorage.setItem('adminLoggedIn','true');sessionStorage.setItem('adminId',id);sessionStorage.setItem('adminName',ANAMES[id]||id);window.location.href='admin.html';return;}
-  if(pw.length>=4){sessionStorage.setItem('user',JSON.stringify({name:'김안전',phone:id}));location.reload();} // [더미]
-  else{document.getElementById('modalErr').classList.add('show');}
+  var id = document.getElementById('modalId').value.trim();
+  var pw = document.getElementById('modalPw').value;
+  if(!id||!pw){ alert('아이디와 비밀번호를 입력하세요.'); return; }
+  if(window.SafeSpotConfig && window.SafeSpotConfig.isRealMode()){
+    document.getElementById('modalErr').textContent = 'real 모드에서는 메인 로그인 화면을 이용해주세요.';
+    document.getElementById('modalErr').classList.add('show');
+    return;
+  }
+  if(ADMINS[id]===pw){
+    SafeSpotAuth.setSession('mock-admin-token', {userId:0, role:'ADMIN', name:ANAMES[id]||id});
+    window.location.href='admin.html';
+    return;
+  }
+  if(pw.length>=4){
+    SafeSpotAuth.setSession('mock-user-token', {userId:1, role:'USER', name:'김안전'});
+    location.reload();
+  } else {
+    document.getElementById('modalErr').classList.add('show');
+  }
 }
 function initHeader(){
-  const raw=sessionStorage.getItem('user');
-  const el=document.getElementById('hdrUtil');
-  if(!el)return;
-  if(raw){try{const u=JSON.parse(raw);el.innerHTML=`<span class="h-username">${u.name||'사용자'} 님</span><button class="btn-join" onclick="location.href='mypage.html'">마이페이지</button><button class="btn-logout" onclick="sessionStorage.clear();location.reload()">로그아웃</button>`;}catch(e){}}
-  else{el.innerHTML=`<button class="btn-login-h" onclick="openLoginModal()">로그인</button><button class="btn-join" onclick="location.href='signup.html'">회원가입</button>`;}
+  var u = SafeSpotAuth.getUser();
+  var el = document.getElementById('hdrUtil');
+  if(!el) return;
+  if(u){
+    el.innerHTML = '<span class="h-username">' + (u.name||'사용자') + ' 님</span>' +
+      '<button class="btn-join" onclick="location.href=\'mypage.html\'">마이페이지</button>' +
+      '<button class="btn-logout" onclick="SafeSpotAuth.logout();location.reload()">로그아웃</button>';
+  } else {
+    el.innerHTML = '<button class="btn-login-h" onclick="openLoginModal()">로그인</button>' +
+      '<button class="btn-join" onclick="location.href=\'signup.html\'">회원가입</button>';
+  }
 }
 function hdrSearch(){const q=document.getElementById('hdrSrch').value.trim();if(q)alert(`"${q}" 검색 기능은 준비 중입니다.`);}
 
 initHeader();
-renderAlerts();
+initAlerts();
 
 // 5초마다 NEW 표시 업데이트 시뮬레이션
 setInterval(()=>{

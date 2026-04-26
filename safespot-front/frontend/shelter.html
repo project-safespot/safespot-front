@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>대피소 찾기 - 국민재난대피포털</title>
 <link rel="stylesheet" href="_common.css">
+<script src="config.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/api-client.js"></script>
 <link rel="preconnect" href="https://dapi.kakao.com">
 <link rel="preconnect" href="https://map.daumcdn.net">
 <link rel="preconnect" href="https://t1.daumcdn.net">
@@ -330,6 +333,7 @@
     </div>
     <div class="shelter-detail-panel" id="detailPanel">
       <button class="sdp-close" onclick="closeDetail()">×</button>
+      <div id="dpDetailWarn" style="display:none;background:#fff8e6;border:1px solid #f0c060;color:#7a5c00;font-size:12px;padding:6px 10px;border-radius:3px;margin-bottom:8px;"></div>
       <div class="sdp-name" id="dpName"></div>
       <div class="sdp-row"><strong>주소</strong><span id="dpAddr"></span></div>
       <div class="sdp-row"><strong>유형</strong><span id="dpType"></span></div>
@@ -397,46 +401,72 @@
 </div>
 
 <script>
-// ============================================================
-// [더미] 실제 API 연결 시 아래 SHELTERS 배열 전체를 삭제하고
-//        fetchShelters() 함수로 교체하세요.
-//
-// GET /api/shelters/nearby?lat={lat}&lng={lng}&radius={radius}&disasterType={disasterType}
-//   → disasterType: "EARTHQUAKE" | "FLOOD" | "LANDSLIDE" | "" (전체)
-//   → 응답: { items: [ { shelterId, name, address, shelterType, disasterType,
-//                         capacityTotal, currentOccupancy, congestionLevel,
-//                         shelterStatus, latitude, longitude, contact, facility } ] }
-//
-// async function fetchShelters(lat, lng, radius = 5000, disasterType = '') {
-//   const token = sessionStorage.getItem('accessToken');
-//   const params = new URLSearchParams({ lat, lng, radius });
-//   if (disasterType) params.append('disasterType', disasterType);
-//   const res = await fetch(`/api/shelters/nearby?${params}`, {
-//     headers: token ? { Authorization: `Bearer ${token}` } : {}
-//   });
-//   if (!res.ok) throw new Error('대피소 조회 실패');
-//   const data = await res.json();
-//   return data.items.map(s => ({
-//     id:           s.shelterId,
-//     name:         s.name,
-//     addr:         s.address,
-//     type:         s.shelterType,
-//     disasterType: s.disasterType,   // "EARTHQUAKE" | "FLOOD" | "LANDSLIDE"
-//     cap:          s.capacityTotal,
-//     cur:          s.currentOccupancy,
-//     lat:          s.latitude,
-//     lng:          s.longitude,
-//     tel:          s.contact,
-//     facility:     s.facility || '',
-//     status:       s.shelterStatus === 'OPEN' ? 'open'
-//                 : s.shelterStatus === 'FULL' ? 'full' : 'ready'
-//   }));
-// }
-//
-// [더미] disasterType 필터를 클라이언트에서 처리하고 있음.
-//        실제 API 연결 시 서버 파라미터로 전달하고 아래 필터 로직 제거.
-// ============================================================
-const SHELTERS = [
+// ShelterNearbyItem DTO → UI shelter object (list / map markers)
+// Backend fields: shelterId, shelterName, shelterType, disasterType, address, latitude, longitude,
+//   distanceM, capacityTotal, currentOccupancy, availableCapacity, congestionLevel, shelterStatus, updatedAt
+// Note: contact and facility are NOT included in the nearby response — use mapShelterDetail for those.
+function mapShelterNearby(s) {
+  return {
+    id:           s.shelterId,
+    name:         s.shelterName,
+    addr:         s.address,
+    type:         s.shelterType,
+    disasterType: s.disasterType,
+    cap:          s.capacityTotal,
+    cur:          s.currentOccupancy,
+    lat:          s.latitude,
+    lng:          s.longitude,
+    tel:          '',
+    facility:     '',
+    status:       s.shelterStatus === 'OPEN' ? 'open' : s.shelterStatus === 'FULL' ? 'full' : 'ready'
+  };
+}
+
+// ShelterDetailDto DTO → UI shelter object (detail panel)
+// Backend fields: shelterId, shelterName, shelterType, disasterType, address, latitude, longitude,
+//   capacityTotal, currentOccupancy, availableCapacity, congestionLevel, shelterStatus,
+//   manager, contact, note, updatedAt
+function mapShelterDetail(s) {
+  return {
+    id:           s.shelterId,
+    name:         s.shelterName,
+    addr:         s.address,
+    type:         s.shelterType,
+    disasterType: s.disasterType,
+    cap:          s.capacityTotal,
+    cur:          s.currentOccupancy,
+    lat:          s.latitude,
+    lng:          s.longitude,
+    tel:          s.contact || '',
+    facility:     s.note || '',
+    status:       s.shelterStatus === 'OPEN' ? 'open' : s.shelterStatus === 'FULL' ? 'full' : 'ready'
+  };
+}
+
+async function loadShelters(lat, lng, radius, disasterType) {
+  // API accepts radius 100–5000 only
+  var qs = 'lat=' + lat + '&lng=' + lng + '&radius=' + (radius || 5000);
+  if(disasterType) qs += '&disasterType=' + encodeURIComponent(disasterType);
+  // Clear mock data immediately — real mode must not serve mock content on API failure
+  SHELTERS = [];
+  filteredShelters = [];
+  try {
+    var json = await SafeSpotApi.request({ service: 'public', path: '/shelters/nearby?' + qs, method: 'GET' });
+    if(!json.success) throw new Error((json.error && json.error.message) || 'SERVER_ERROR');
+    SHELTERS = ((json.data && json.data.items) || []).map(mapShelterNearby);
+    filteredShelters = SHELTERS.slice();
+    renderList();
+    renderMarkers();
+  } catch(e) {
+    document.getElementById('shelterList').innerHTML =
+      '<div style="padding:20px;color:#c00;font-size:14px;">대피소 정보를 불러올 수 없습니다.<br>' +
+      '<span style="font-size:12px;color:#888;">잠시 후 다시 시도해 주세요.</span></div>';
+    document.getElementById('shelterCount').innerHTML = '<strong>0개</strong> 대피소 표시 중';
+    renderMarkers();
+  }
+}
+
+const MOCK_SHELTERS = [
   {id:1, name:'서울시청 광장 임시대피소',      addr:'서울 중구 태평로1가 31',           type:'임시대피소', disasterType:'FLOOD',      cap:2000, cur:1420, lat:37.5665, lng:126.9780, tel:'02-120',         facility:'화장실, 의무실, 급수, 식량', status:'open'},
   {id:2, name:'여의도 한강공원 대피소',         addr:'서울 영등포구 여의도동 2-14',       type:'광역대피소', disasterType:'FLOOD',      cap:5000, cur:5100, lat:37.5284, lng:126.9333, tel:'02-3780-0494',   facility:'화장실, 취식가능, 텐트존', status:'full'},
   {id:3, name:'광화문 광장 임시대피소',         addr:'서울 종로구 세종로 1-57',          type:'임시대피소', disasterType:'EARTHQUAKE',  cap:1500, cur:820,  lat:37.5759, lng:126.9769, tel:'02-2133-6600',   facility:'화장실, 의무실, 급수', status:'open'},
@@ -463,9 +493,20 @@ const SHELTERS = [
   {id:24,name:'중랑구 용마폭포공원 대피소',     addr:'서울 중랑구 망우로 210',            type:'임시대피소', disasterType:'LANDSLIDE',  cap:600,  cur:280,  lat:37.5980, lng:127.0930, tel:'02-2094-2114',   facility:'화장실, 급수', status:'open'},
 ];
 
-let filteredShelters = [...SHELTERS];
+let SHELTERS = (window.SafeSpotConfig && window.SafeSpotConfig.isMockMode()) ? MOCK_SHELTERS.slice() : [];
+
+let filteredShelters = SHELTERS.slice();
 let map, markers = [], selectedId = null;
 let userLat = null, userLng = null, userMarker = null, userCircle = null;
+
+if(window.SafeSpotConfig && window.SafeSpotConfig.isRealMode()) {
+  var realStrip=document.getElementById('emgStrip');
+  if(realStrip) realStrip.style.display='none';
+  var initialList=document.getElementById('shelterList');
+  if(initialList) initialList.innerHTML='<div style="padding:20px;color:#888;font-size:14px;">대피소 정보를 불러오는 중입니다.</div>';
+  var initialCount=document.getElementById('shelterCount');
+  if(initialCount) initialCount.innerHTML='<strong>0개</strong> 대피소 표시 중';
+}
 
 function statusLabel(s){ return s === 'open' ? '운영중' : s === 'full' ? '수용초과' : '대기중'; }
 function statusBadge(s){ return s === 'open' ? 'badge-open' : s === 'full' ? 'badge-full' : 'badge-ready'; }
@@ -551,37 +592,67 @@ function hdrDoSearch(){
   filterShelters();
 }
 
-function selectShelter(id){
-  selectedId = id;
-  const s = SHELTERS.find(x => x.id === id);
-  if(!s) return;
-
-  renderList();
-
+function showShelterDetail(s) {
+  document.getElementById('dpDetailWarn').style.display = 'none';
   document.getElementById('dpName').textContent = s.name;
   document.getElementById('dpAddr').textContent = s.addr;
   document.getElementById('dpType').textContent = s.type;
-  // [더미] s.disasterType — 실제 API 연결 시 서버 응답의 disasterType 필드 그대로 사용
-  const dpDisasterEl = document.getElementById('dpDisaster');
+  var dpDisasterEl = document.getElementById('dpDisaster');
   if(s.disasterType){
-    dpDisasterEl.innerHTML = `<span class="disaster-badge ${disasterBadgeClass(s.disasterType)}">${disasterLabel(s.disasterType)}</span>`;
+    dpDisasterEl.innerHTML = '<span class="disaster-badge ' + disasterBadgeClass(s.disasterType) + '">' + disasterLabel(s.disasterType) + '</span>';
   } else {
     dpDisasterEl.textContent = '정보 없음';
   }
   document.getElementById('dpCap').textContent = s.cap.toLocaleString() + '명';
-
-  const pct = capPercent(s.cur, s.cap);
+  var pct = capPercent(s.cur, s.cap);
   document.getElementById('dpCur').textContent = s.cur.toLocaleString() + '명 (' + pct + '%)';
-  document.getElementById('dpStatus').innerHTML = `<span class="shelter-badge ${statusBadge(s.status)}">${statusLabel(s.status)}</span>`;
+  document.getElementById('dpStatus').innerHTML = '<span class="shelter-badge ' + statusBadge(s.status) + '">' + statusLabel(s.status) + '</span>';
   document.getElementById('dpTel').textContent = s.tel;
   document.getElementById('dpFacility').textContent = s.facility;
   document.getElementById('detailPanel').classList.add('open');
-
   map.setCenter(new kakao.maps.LatLng(s.lat, s.lng));
   map.setLevel(3);
 }
 
+async function selectShelter(id){
+  selectedId = id;
+  renderList();
+
+  if(window.SAFESPOT_CONFIG.apiMode === 'real') {
+    try {
+      var json = await SafeSpotApi.request({ service: 'public', path: '/shelters/' + id, method: 'GET' });
+      if(!json.success) throw new Error((json.error && json.error.message) || 'SERVER_ERROR');
+      showShelterDetail(mapShelterDetail(json.data));
+      return;
+    } catch(e) {
+      // Detail API failed: fall back to SHELTERS cache for UI continuity with visible warning
+      var cached = SHELTERS.find(function(x){ return x.id === id; });
+      if(!cached) {
+        document.getElementById('detailPanel').classList.add('open');
+        document.getElementById('dpDetailWarn').style.display = 'none';
+        document.getElementById('dpName').textContent = '상세 정보를 불러올 수 없습니다.';
+        ['dpAddr', 'dpType', 'dpCap', 'dpCur', 'dpTel', 'dpFacility'].forEach(function(f) {
+          document.getElementById(f).textContent = '-';
+        });
+        document.getElementById('dpDisaster').textContent = '-';
+        document.getElementById('dpStatus').textContent = '-';
+        return;
+      }
+      var warnEl = document.getElementById('dpDetailWarn');
+      warnEl.textContent = '상세 정보를 최신 상태로 불러오지 못해 목록 데이터를 표시합니다.';
+      warnEl.style.display = 'block';
+      showShelterDetail(cached);
+      return;
+    }
+  }
+
+  var s = SHELTERS.find(function(x){ return x.id === id; });
+  if(!s) return;
+  showShelterDetail(s);
+}
+
 function closeDetail(){
+  document.getElementById('dpDetailWarn').style.display = 'none';
   document.getElementById('detailPanel').classList.remove('open');
   selectedId = null;
   renderList();
@@ -686,17 +757,22 @@ function applyGPSFilter(){
   });
   userCircle.setMap(map);
 
-  filteredShelters = [...SHELTERS].sort(
-    (a, b) => haversine(userLat, userLng, a.lat, a.lng) - haversine(userLat, userLng, b.lat, b.lng)
-  );
-
-  const bar = document.getElementById('gpsBar');
+  var bar = document.getElementById('gpsBar');
   bar.style.display = 'block';
-  bar.innerHTML = `📍 내 위치 기준 거리순 정렬 · 반경 3km 파란 원 표시`;
+  bar.innerHTML = '📍 내 위치 기준 거리순 정렬 · 반경 3km 파란 원 표시';
 
   map.setCenter(userPos);
   map.setLevel(5);
 
+  if(window.SAFESPOT_CONFIG.apiMode === 'real') {
+    var disasterType = document.getElementById('disasterSel').value;
+    loadShelters(userLat, userLng, 5000, disasterType);
+    return;
+  }
+
+  filteredShelters = SHELTERS.slice().sort(
+    function(a, b){ return haversine(userLat, userLng, a.lat, a.lng) - haversine(userLat, userLng, b.lat, b.lng); }
+  );
   renderList();
   renderMarkers();
 }
@@ -714,22 +790,27 @@ function resetGPS(){
     userCircle = null;
   }
 
-  const btn = document.getElementById('gpsBtn');
+  var btn = document.getElementById('gpsBtn');
   btn.textContent = '📍 내 위치 기준 탐색';
   btn.classList.remove('active', 'loading');
 
   document.getElementById('gpsBar').style.display = 'none';
-  filteredShelters = [...SHELTERS];
-
-  renderList();
-  renderMarkers();
 
   map.setCenter(new kakao.maps.LatLng(37.5665, 126.9780));
   map.setLevel(8);
+
+  if(window.SAFESPOT_CONFIG.apiMode === 'real') {
+    loadShelters(37.5665, 126.9780);
+    return;
+  }
+
+  filteredShelters = SHELTERS.slice();
+  renderList();
+  renderMarkers();
 }
 
 function checkLogin(){
-  if(sessionStorage.getItem('user')) window.location.href='dashboard.html';
+  if(SafeSpotAuth.isLoggedIn()) window.location.href='dashboard.html';
   else window.location.href='index.html';
 }
 
@@ -747,20 +828,21 @@ function backToMethodsModal(){
   document.getElementById('modalIdForm').classList.remove('show');
 }
 function doModalLogin(){
-  const id = document.getElementById('modalId').value.trim();
-  const pw = document.getElementById('modalPw').value;
+  var id = document.getElementById('modalId').value.trim();
+  var pw = document.getElementById('modalPw').value;
   if(!id || !pw){ alert('아이디와 비밀번호를 입력하세요.'); return; }
-
+  if(window.SafeSpotConfig && window.SafeSpotConfig.isRealMode()){
+    document.getElementById('modalErr').textContent = 'real 모드에서는 메인 로그인 화면을 이용해주세요.';
+    document.getElementById('modalErr').classList.add('show');
+    return;
+  }
   if(ADMINS[id] === pw){
-    sessionStorage.setItem('adminLoggedIn','true');
-    sessionStorage.setItem('adminId',id);
-    sessionStorage.setItem('adminName',ANAMES[id] || id);
+    SafeSpotAuth.setSession('mock-admin-token', {userId:0, role:'ADMIN', name:ANAMES[id]||id});
     window.location.href='admin.html';
     return;
   }
-
   if(pw.length >= 4){
-    sessionStorage.setItem('user', JSON.stringify({name:'김안전', phone:id})); // [더미] 실제 로그인 사용자 정보로 교체
+    SafeSpotAuth.setSession('mock-user-token', {userId:1, role:'USER', name:'김안전'});
     location.reload();
   } else {
     document.getElementById('modalErr').classList.add('show');
@@ -768,17 +850,16 @@ function doModalLogin(){
 }
 
 function initHeader(){
-  const raw = sessionStorage.getItem('user');
-  const el = document.getElementById('hdrUtil');
+  var u = SafeSpotAuth.getUser();
+  var el = document.getElementById('hdrUtil');
   if(!el) return;
-
-  if(raw){
-    try{
-      const u = JSON.parse(raw);
-      el.innerHTML = `<span class="h-username">${u.name || '사용자'} 님</span><button class="btn-join" onclick="location.href='mypage.html'">마이페이지</button><button class="btn-logout" onclick="sessionStorage.clear();location.reload()">로그아웃</button>`;
-    }catch(e){}
+  if(u){
+    el.innerHTML = '<span class="h-username">' + (u.name||'사용자') + ' 님</span>' +
+      '<button class="btn-join" onclick="location.href=\'mypage.html\'">마이페이지</button>' +
+      '<button class="btn-logout" onclick="SafeSpotAuth.logout();location.reload()">로그아웃</button>';
   } else {
-    el.innerHTML = `<button class="btn-login-h" onclick="openLoginModal()">로그인</button><button class="btn-join" onclick="location.href='signup.html'">회원가입</button>`;
+    el.innerHTML = '<button class="btn-login-h" onclick="openLoginModal()">로그인</button>' +
+      '<button class="btn-join" onclick="location.href=\'signup.html\'">회원가입</button>';
   }
 }
 
@@ -793,16 +874,20 @@ function hdrSearch(){
 initHeader();
 
 kakao.maps.load(function(){
-  const mapContainer = document.getElementById('map');
-  const mapOption = {
+  var mapContainer = document.getElementById('map');
+  var mapOption = {
     center: new kakao.maps.LatLng(37.5665, 126.9780),
     level: 8
   };
 
   map = new kakao.maps.Map(mapContainer, mapOption);
 
-  renderList();
-  renderMarkers();
+  if(window.SAFESPOT_CONFIG.apiMode === 'real') {
+    loadShelters(37.5665, 126.9780);
+  } else {
+    renderList();
+    renderMarkers();
+  }
 
   setTimeout(function(){
     map.relayout();
