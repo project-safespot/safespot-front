@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>가족 찾기 - 국민재난대피포털</title>
 <link rel="stylesheet" href="_common.css">
+<script src="config.js"></script>
+<script src="js/auth.js"></script>
 <link rel="preconnect" href="https://dapi.kakao.com">
 <link rel="preconnect" href="https://map.daumcdn.net">
 <link rel="preconnect" href="https://t1.daumcdn.net">
@@ -417,12 +419,28 @@
 
 <script>
 // [더미] 친구 목록 — 백엔드 연결 시 GET /api/friends 응답으로 교체 (MVP 외 기능)
-const friends=[
+const MOCK_FRIENDS=[
   {nm:'김영희',rel:'어머니',phone:'010-1234-5678',shelter:'강남구민회관',addr:'서울 강남구 삼성동 142',time:'09:22',status:'대피소',lat:37.5087,lng:127.0583,color:'#c8102e'},
   {nm:'김철수',rel:'아버지',phone:'010-2345-6789',shelter:'역삼동 주민센터 대피소',addr:'서울 강남구 역삼동 736',time:'09:18',status:'대피소',lat:37.5004,lng:127.0366,color:'#2563a8'},
   {nm:'최수진',rel:'배우자',phone:'010-3456-7890',shelter:'역삼동 주민센터 대피소',addr:'서울 강남구 역삼동 736',time:'09:40',status:'대피소',lat:37.5014,lng:127.0376,color:'#27ae60'},
   {nm:'정우성',rel:'친구',phone:'010-4567-8901',shelter:'-',addr:'-',time:'-',status:'미체크인',lat:null,lng:null,color:'#aaa'},
 ];
+const friends=(window.SafeSpotConfig && window.SafeSpotConfig.isMockMode()) ? MOCK_FRIENDS.slice() : [];
+
+function applyDemoOnlyState(){
+  if(!(window.SafeSpotConfig && window.SafeSpotConfig.isRealMode())) return;
+  var strip=document.getElementById('emgStrip');
+  if(strip) strip.style.display='none';
+  var hero=document.querySelector('.page-hero');
+  if(hero){
+    hero.insertAdjacentHTML('afterend','<div class="wrap" style="padding-top:14px;"><div style="background:#fff7e6;border:1px solid #ffd58a;color:#6b4700;padding:12px 16px;font-size:14px;font-weight:700;">데모 화면입니다. 실제 백엔드 데이터와 연결되지 않았습니다.</div></div>');
+  }
+  var myInfo=document.querySelector('.my-info span');
+  if(myInfo) myInfo.textContent='실제 체크인 위치 API 연결 전입니다.';
+  document.querySelectorAll('.req-item').forEach(function(el){el.remove();});
+  var reqHead=document.querySelector('.panel-head.red span');
+  if(reqHead) reqHead.textContent='0건';
+}
 
 let map;
 kakao.maps.load(function(){
@@ -430,6 +448,8 @@ kakao.maps.load(function(){
     center:new kakao.maps.LatLng(37.502,127.047),
     level:5
   });
+
+  if(window.SafeSpotConfig && window.SafeSpotConfig.isRealMode()) return;
 
   // 내 위치 마커
   new kakao.maps.CustomOverlay({
@@ -452,6 +472,10 @@ kakao.maps.load(function(){
 });
 
 function renderFriends(){
+  if(window.SafeSpotConfig && window.SafeSpotConfig.isRealMode()){
+    document.getElementById('friendBody').innerHTML='<tr><td colspan="8" style="text-align:center;padding:24px;color:#888;">가족 찾기 API 연결 전입니다.</td></tr>';
+    return;
+  }
   const scMap={'대피소':'sc-in','미체크인':'sc-out','SOS':'sc-sos'};
   document.getElementById('friendBody').innerHTML=friends.map((f,i)=>`
     <tr onclick="showDetail(${i})">
@@ -501,7 +525,12 @@ function doModalLogin(){
   const id=document.getElementById('modalId').value.trim();
   const pw=document.getElementById('modalPw').value;
   if(!id||!pw){alert('아이디와 비밀번호를 입력하세요.');return;}
-  if(ADMINS[id]===pw){sessionStorage.setItem('adminLoggedIn','true');sessionStorage.setItem('adminId',id);sessionStorage.setItem('adminName',ANAMES[id]||id);window.location.href='admin.html';return;}
+  if(window.SafeSpotConfig && window.SafeSpotConfig.isRealMode()){
+    document.getElementById('modalErr').textContent='real 모드에서는 메인 로그인 화면을 이용해주세요.';
+    document.getElementById('modalErr').classList.add('show');
+    return;
+  }
+  if(ADMINS[id]===pw){SafeSpotAuth.setSession('mock-admin-token',{userId:0,role:'ADMIN',name:ANAMES[id]||id});window.location.href='admin.html?apiMode=mock';return;}
   if(pw.length>=4){sessionStorage.setItem('user',JSON.stringify({name:'김안전',phone:id}));location.reload();}
   else{document.getElementById('modalErr').classList.add('show');}
 }
@@ -509,11 +538,17 @@ function initHeader(){
   const raw=sessionStorage.getItem('user');
   const el=document.getElementById('hdrUtil');
   if(!el) return;
+  if(window.SafeSpotConfig && window.SafeSpotConfig.isRealMode()){
+    el.innerHTML=`<button class="btn-login-h" onclick="location.href='login.html?apiMode=real'">로그인</button><button class="btn-join" onclick="location.href='signup.html?apiMode=real'">회원가입</button>`;
+    const req=document.getElementById('loginRequired');
+    if(req) req.style.display='flex';
+    return;
+  }
   if(raw){
     try{
       const u=JSON.parse(raw);
       const name=u.name||'사용자';
-      el.innerHTML=`<span class="h-username">${name} 님</span><button class="btn-join" onclick="location.href='mypage.html'">마이페이지</button><button class="btn-logout" onclick="sessionStorage.clear();location.reload()">로그아웃</button>`;
+      el.innerHTML=`<span class="h-username">${name} 님</span><button class="btn-join" onclick="location.href='mypage.html'">마이페이지</button><button class="btn-logout" onclick="sessionStorage.removeItem('user');location.reload()">로그아웃</button>`;
       document.getElementById('myName').textContent=name+' (나)';
       document.getElementById('myAvatar').textContent=name[0];
     }catch(e){}
@@ -525,6 +560,7 @@ function initHeader(){
 }
 function hdrSearch(){const q=document.getElementById('hdrSrch').value.trim();if(q)alert(`"${q}" 검색 기능은 준비 중입니다.`);}
 
+applyDemoOnlyState();
 initHeader();
 renderFriends();
 

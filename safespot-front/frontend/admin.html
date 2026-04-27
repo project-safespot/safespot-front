@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=1280">
 <title>관리자 대시보드 - 국민재난대피포털</title>
 <link rel="stylesheet" href="_common.css">
+<script src="config.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/api-client.js"></script>
 <style>
 header{background:#1a2a4a;}
 .h-logo-texts strong{color:#fff;}
@@ -301,6 +304,7 @@ tbody td{padding:11px 13px;font-size:15px;}
         <div class="mf-row"><label>운영 상태</label><select id="eOp"><option>운영 중</option><option>운영 중단</option><option>점검 중</option><option>만원</option></select></div>
         <div class="mf-row"><label>담당자</label><input type="text" id="eMgr"></div>
         <div class="mf-row"><label>연락처</label><input type="text" id="eTel"></div>
+        <div class="mf-row full"><label>수정 사유 <span style="color:var(--red)">*</span></label><input type="text" id="eReason" placeholder="수정 사유를 입력하세요"></div>
         <div class="mf-row full"><label>비고</label><textarea id="eNote" placeholder="특이사항"></textarea></div>
       </div>
     </div>
@@ -337,96 +341,137 @@ tbody td{padding:11px 13px;font-size:15px;}
 
 <script>
 /* ── 인증 ── */
-// [더미] 목 관리자 계정 — 백엔드 연결 시 제거 (POST /api/auth/login role=ADMIN 판단)
-const ADMINS={admin:'admin1234',manager:'manager1234',admin2:'admin2024'};
-const ANAMES={admin:'홍관리 (강남구청)',manager:'김담당 (재난관리팀)',admin2:'이운영 (시설관리팀)'};
-/* ── 인증: index.html 로그인과 통합 ──
-   sessionStorage.accessToken = JWT
-   sessionStorage.user = JSON { userId, role, name }
-   role === 'ADMIN' 인 경우에만 이 페이지 접근 허용
-   ─────────────────────────────────────────────── */
-function getToken(){ return sessionStorage.getItem('accessToken')||''; }
-function getUser(){ try{ return JSON.parse(sessionStorage.getItem('user')||'null'); }catch(e){ return null; } }
-function doLogout(){ sessionStorage.clear(); window.location.href='index.html'; }
+function doLogout(){ SafeSpotAuth.logout(); window.location.href='index.html'; }
 
-window.addEventListener('DOMContentLoaded',()=>{
-  /* 세션 체크: accessToken + role=ADMIN 없으면 메인으로 redirect */
-  const token = getToken();
-  const user = getUser();
-  if(!token || !user || user.role !== 'ADMIN'){
-    /* 목 데이터 fallback: adminLoggedIn 도 허용 (백엔드 연결 전) */
-    if(sessionStorage.getItem('adminLoggedIn')==='true'){
-      const adminId = sessionStorage.getItem('adminId');
-      initDash(ANAMES[adminId]||adminId||'관리자');
-      return;
-    }
+window.addEventListener('DOMContentLoaded',function(){
+  if(!SafeSpotAuth.isLoggedIn()){
     alert('관리자 권한이 필요합니다. 메인 페이지에서 로그인해주세요.');
     window.location.href='index.html';
     return;
   }
+  var user=SafeSpotAuth.getUser();
+  if(!user||user.role!=='ADMIN'){
+    alert('관리자 권한이 필요합니다.');
+    window.location.href='index.html';
+    return;
+  }
   initDash(user.name||'관리자');
+  if(window.SafeSpotConfig && window.SafeSpotConfig.isRealMode()) loadAdminDashboard();
 });
 
-/* ── TODO: 백엔드 연결 시 관리자 API 호출 활성화 ──
+/* ── 관리자 API ── */
+var backendShelters=[];
 
-const API_BASE = '/api';
-
-// GET /api/admin/dashboard
-async function loadAdminDashboard() {
-  const res = await fetch(API_BASE + '/admin/dashboard', {
-    headers: { 'Authorization': 'Bearer ' + getToken() }
-  });
-  if(res.status === 401) { alert('세션 만료'); doLogout(); return; }
-  const json = await res.json();
-  // json.data.summary, json.data.shelters 로 대시보드 렌더링
+async function loadAdminDashboard(){
+  showAdminLoadingState();
+  try{
+    var json=await SafeSpotApi.request({service:'core',path:'/admin/dashboard',auth:true});
+    if(!json.success) throw new Error((json.error&&json.error.message)||'LOAD_FAILED');
+    var data=json.data||{};
+    var s=data.summary||{openShelters:0,fullShelters:0,totalShelters:0};
+    var apiShelters=data.shelters||[];
+    document.getElementById('cntG').textContent=s.openShelters;
+    document.getElementById('cntR').textContent=s.fullShelters;
+    document.getElementById('cntY').textContent=s.totalShelters-s.openShelters-s.fullShelters;
+    var totOcc=apiShelters.reduce(function(a,x){return a+(x.currentOccupancy||0);},0);
+    document.getElementById('cntTot').textContent=totOcc.toLocaleString()+'명';
+    backendShelters=apiShelters;
+    shelters=backendShelters.map(mapAdminShelter);
+    residents=[];
+    updateResidentShelterOptions();
+    renderAll();
+  }catch(e){
+    if(e.status===403) alert('관리자 권한이 필요합니다.');
+    else showAdminErrorState('관리자 대시보드 데이터를 불러올 수 없습니다.');
+  }
 }
 
-// POST /api/admin/evacuation-entries (입소 등록)
-async function apiPostEntry(body) {
-  const res = await fetch(API_BASE + '/admin/evacuation-entries', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getToken() },
-    body: JSON.stringify(body)
-    // body: { shelterId, name, phoneNumber, address, familyInfo, healthStatus, specialProtectionFlag, assignedZone }
-  });
-  if(res.status === 401) { alert('세션 만료'); doLogout(); return null; }
-  return await res.json(); // { success, data: { entryId, entryStatus, enteredAt } }
+function mapAdminShelter(s){
+  var op=s.shelterStatus==='CLOSED'?'운영 중단':s.shelterStatus==='MAINTENANCE'?'점검 중':'운영 중';
+  return {
+    id:s.shelterId,
+    name:s.shelterName,
+    addr:s.address||'',
+    cap:s.capacityTotal||0,
+    cur:s.currentOccupancy||0,
+    type:s.shelterType||'',
+    op:op,
+    mgr:s.managerName||'-',
+    tel:s.contact||'-'
+  };
 }
 
-// POST /api/admin/evacuation-entries/{id}/exit (퇴소)
-async function apiExitEntry(entryId, reason='') {
-  const res = await fetch(API_BASE + '/admin/evacuation-entries/' + entryId + '/exit', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getToken() },
-    body: JSON.stringify({ reason })
-  });
-  if(res.status === 401) { alert('세션 만료'); doLogout(); return null; }
-  return await res.json();
+async function apiPostEntry(body){
+  return SafeSpotApi.request({service:'core',path:'/admin/evacuation-entries',method:'POST',auth:true,body:body});
 }
 
-// PATCH /api/admin/shelters/{id} (수용인원 수정 — reason 필수)
-async function apiPatchShelter(shelterId, capacityTotal, reason) {
-  if(!reason) { alert('수정 사유를 입력하세요.'); return null; }
-  const res = await fetch(API_BASE + '/admin/shelters/' + shelterId, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getToken() },
-    body: JSON.stringify({ capacityTotal, reason })
-  });
-  if(res.status === 401) { alert('세션 만료'); doLogout(); return null; }
-  return await res.json();
+async function apiExitEntry(entryId,reason){
+  return SafeSpotApi.request({service:'core',path:'/admin/evacuation-entries/'+entryId+'/exit',method:'POST',auth:true,body:{reason:reason||''}});
 }
-── 관리자 API 끝 ── */
+
+async function apiPatchShelter(shelterId,capacityTotal,reason){
+  return SafeSpotApi.request({service:'core',path:'/admin/shelters/'+shelterId,method:'PATCH',auth:true,body:{capacityTotal:capacityTotal,reason:reason}});
+}
 function initDash(name){
   document.getElementById('adminNameDisp').textContent=name||'관리자';
+  if(window.SafeSpotConfig && window.SafeSpotConfig.isRealMode()){
+    showAdminLoadingState();
+    return;
+  }
   renderAll();
   // [더미] 현재인원 랜덤 변동 시뮬레이션 — 백엔드 연결 시 제거 (실시간 폴링 또는 WebSocket으로 대체)
-setInterval(()=>{ shelters.forEach(s=>{const d=Math.floor(Math.random()*7)-3;s.cur=Math.max(0,Math.min(s.cap,s.cur+d));}); renderAll(); upd(); },5000);
+  setInterval(()=>{ shelters.forEach(s=>{const d=Math.floor(Math.random()*7)-3;s.cur=Math.max(0,Math.min(s.cap,s.cur+d));}); renderAll(); upd(); },5000);
   upd();
 }
 function upd(){ document.getElementById('updDisp').textContent='갱신: '+new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',second:'2-digit'}); }
 
+function showAdminLoadingState(){
+  var totalCard=document.querySelector('.cv-b');
+  if(totalCard) totalCard.textContent='-';
+  ['cntG','cntY','cntR','cntTot','statTotal','statSpecial'].forEach(function(id){
+    var el=document.getElementById(id);
+    if(el) el.textContent='-';
+  });
+  document.getElementById('monBody').innerHTML='<tr><td colspan="11" style="text-align:center;padding:24px;color:#888;">관리자 대시보드 데이터를 불러오는 중입니다.</td></tr>';
+  document.getElementById('manBody').innerHTML='<tr><td colspan="11" style="text-align:center;padding:24px;color:#888;">관리자 대시보드 데이터를 불러오는 중입니다.</td></tr>';
+  document.getElementById('resBody').innerHTML='<tr><td colspan="12" style="text-align:center;padding:24px;color:#888;">입소자 데이터 API 연결 전입니다.</td></tr>';
+  var bulk=document.querySelector('.bulk-template');
+  if(bulk) bulk.textContent='real 모드에서는 샘플 개인정보를 표시하지 않습니다.';
+  var bulkInput=document.getElementById('bulkInput');
+  if(bulkInput) bulkInput.placeholder='입소자 대량 입력 API 연결 전입니다.';
+  var resFilter=document.getElementById('resFilter');
+  if(resFilter) resFilter.innerHTML='<option value="all">전체 시설</option>';
+  var rShelter=document.getElementById('rShelter');
+  if(rShelter) rShelter.innerHTML='<option value="">대피소 데이터 로드 전</option>';
+  document.getElementById('crowdAlert').innerHTML='실시간 혼잡 데이터 로드 전입니다.';
+  document.getElementById('crowdGrid').innerHTML='';
+  document.getElementById('scatterBody').innerHTML='<tr><td colspan="6" style="text-align:center;padding:24px;color:#888;">분산 권고 데이터가 없습니다.</td></tr>';
+  var logBody=document.querySelector('#tab-log tbody');
+  if(logBody) logBody.innerHTML='<tr><td colspan="6" style="text-align:center;padding:24px;color:#888;">운영 로그 API 연결 전입니다.</td></tr>';
+  var statTables=document.querySelectorAll('#tab-stats table');
+  statTables.forEach(function(table){
+    if(!table.querySelector('#statTotal')) table.innerHTML='<tr><td style="padding:12px;color:#888;">실데이터 연결 전입니다.</td></tr>';
+  });
+  document.getElementById('monTime').textContent='-';
+}
+
+function updateResidentShelterOptions(){
+  var options=shelters.map(function(s){return '<option>'+s.name+'</option>';}).join('');
+  var resFilter=document.getElementById('resFilter');
+  if(resFilter) resFilter.innerHTML='<option value="all">전체 시설</option>'+options;
+  var rShelter=document.getElementById('rShelter');
+  if(rShelter) rShelter.innerHTML=options||'<option value="">대피소 데이터 없음</option>';
+}
+
+function showAdminErrorState(message){
+  showAdminLoadingState();
+  document.getElementById('monBody').innerHTML='<tr><td colspan="11" style="text-align:center;padding:24px;color:#c00;">'+message+'</td></tr>';
+  document.getElementById('manBody').innerHTML='<tr><td colspan="11" style="text-align:center;padding:24px;color:#c00;">'+message+'</td></tr>';
+  document.getElementById('crowdAlert').innerHTML='<span style="color:#c00;">'+message+'</span>';
+}
+
 /* ── 대피소 데이터 ── */
-const shelters=[
+const MOCK_ADMIN_SHELTERS=[
   {id:1,name:'역삼동 주민센터 대피소',addr:'강남구 역삼동 736',cap:300,cur:85,type:'민방위 대피소',op:'운영 중',mgr:'이담당',tel:'02-3423-5114'},
   {id:2,name:'강남구민회관',addr:'강남구 삼성동 142',cap:500,cur:415,type:'민방위 대피소',op:'운영 중',mgr:'박담당',tel:'02-3423-6000'},
   {id:3,name:'역삼초등학교 체육관',addr:'강남구 역삼동 648',cap:200,cur:182,type:'재난 대피소',op:'운영 중',mgr:'최담당',tel:'02-565-1234'},
@@ -453,15 +498,18 @@ const shelters=[
   {id:24,name:'자곡동 어울림센터',addr:'강남구 자곡동 185',cap:180,cur:55,type:'민방위 대피소',op:'운영 중',mgr:'김담당',tel:'02-3461-5500'},
 ];
 
+let shelters=(window.SafeSpotConfig && window.SafeSpotConfig.isMockMode()) ? MOCK_ADMIN_SHELTERS.slice() : [];
+
 /* ── 입소자 데이터 ── */
 // [더미] GET /api/admin/evacuation-entries?shelterId={id}&status=ENTERED 응답으로 교체
-let residents=[
+const MOCK_RESIDENTS=[
   {id:1,nm:'홍길동',rrn:'900101',tel:'010-1234-5678',addr:'강남구 역삼동 123',family:'부부+자녀2명',health:'이상 없음',special:'N',shelter:'역삼동 주민센터 대피소',room:'A동 101호',time:'2026-04-08 09:15'},
   {id:2,nm:'김순이',rrn:'450823',tel:'010-9876-5432',addr:'강남구 삼성동 45',family:'독거노인',health:'고혈압·당뇨',special:'Y',shelter:'강남구민회관',room:'B동 205호',time:'2026-04-08 09:22'},
   {id:3,nm:'이민준',rrn:'850312',tel:'010-3456-7890',addr:'강남구 대치동 788',family:'1인가구',health:'이상 없음',special:'N',shelter:'역삼초등학교 체육관',room:'1층 강당',time:'2026-04-08 09:30'},
   {id:4,nm:'박지수',rrn:'920614',tel:'010-2222-3333',addr:'강남구 압구정동 12',family:'부부+영아1명',health:'이상 없음',special:'Y',shelter:'선릉역 대피 공간',room:'C구역 14번',time:'2026-04-08 09:35'},
   {id:5,nm:'최영호',rrn:'690905',tel:'010-5555-6666',addr:'강남구 논현동 99',family:'부부',health:'심장질환(관찰 중)',special:'Y',shelter:'강남구민회관',room:'1층 의무실 인근',time:'2026-04-08 09:40'},
 ];
+let residents=(window.SafeSpotConfig && window.SafeSpotConfig.isMockMode()) ? MOCK_RESIDENTS.slice() : [];
 let resIdSeq=6;
 
 const pct=s=>Math.round(s.cur/s.cap*100);
@@ -574,14 +622,40 @@ function openResidentModal(id){
   document.getElementById('rNote').value='';
   document.getElementById('resModal').classList.add('open');
 }
-function saveResident(){
+async function saveResident(){
   const nm=document.getElementById('rNm').value.trim();
   if(!nm){alert('성명을 입력하세요.');return;}
-  const data={nm,rrn:document.getElementById('rRrn').value,tel:document.getElementById('rTel').value,addr:document.getElementById('rAddr').value,family:document.getElementById('rFamily').value,health:document.getElementById('rHealth').value||'이상 없음',special:document.getElementById('rSpecial').value.startsWith('Y')?'Y':'N',shelter:document.getElementById('rShelter').value,room:document.getElementById('rRoom').value,time:new Date().toLocaleString('ko-KR').replace(/\./g,'-').replace(/ /g,' ').slice(0,16)};
+  const shelterName=document.getElementById('rShelter').value;
+  const data={nm,rrn:document.getElementById('rRrn').value,tel:document.getElementById('rTel').value,addr:document.getElementById('rAddr').value,family:document.getElementById('rFamily').value,health:document.getElementById('rHealth').value||'이상 없음',special:document.getElementById('rSpecial').value.startsWith('Y')?'Y':'N',shelter:shelterName,room:document.getElementById('rRoom').value,time:new Date().toLocaleString('ko-KR').replace(/\./g,'-').replace(/ /g,' ').slice(0,16)};
+  if(window.SAFESPOT_CONFIG.apiMode==='real'&&!editResId){
+    var found=backendShelters.find(function(x){return x.shelterName===shelterName;});
+    if(!found){alert('대피소 서버 ID를 확인할 수 없습니다. 페이지를 새로고침 후 시도하세요.');return;}
+    var tel=document.getElementById('rTel').value.replace(/-/g,'');
+    var body={
+      shelterId:found.shelterId,
+      name:nm,
+      phoneNumber:tel||null,
+      address:document.getElementById('rAddr').value,
+      familyInfo:document.getElementById('rFamily').value,
+      healthStatus:document.getElementById('rHealth').value||'이상 없음',
+      specialProtectionFlag:document.getElementById('rSpecial').value.startsWith('Y'),
+      note:document.getElementById('rNote').value
+    };
+    try{
+      await apiPostEntry(body);
+      document.getElementById('resModal').classList.remove('open');
+      alert('저장되었습니다.');
+      await loadAdminDashboard();
+    }catch(e){
+      if(e.status===403) alert('관리자 권한이 필요합니다.');
+      else alert('저장에 실패했습니다: '+e.message);
+    }
+    return;
+  }
   if(editResId){Object.assign(residents.find(r=>r.id===editResId),data);}
   else{data.id=resIdSeq++;residents.push(data);}
   document.getElementById('resModal').classList.remove('open');
-  renderResidents(); updateSum(); alert('저장되었습니다.'); // [더미] 저장 성공 후 POST /api/admin/evacuation-entries 응답 처리 필요
+  renderResidents(); updateSum(); alert('저장되었습니다.');
 }
 function delResident(id){if(confirm('입소자 정보를 삭제하시겠습니까?')){residents=residents.filter(r=>r.id!==id);renderResidents();updateSum();}}
 
@@ -613,15 +687,36 @@ function exportCSV(){
 
 /* 대피소 수정 */
 let editId=null;
+let editShelterBackendId=null;
 function openEdit(id){
-  editId=id; const s=shelters.find(x=>x.id===id);
-  document.getElementById('eNm').value=s.name;document.getElementById('eAddr').value=s.addr;document.getElementById('eCap').value=s.cap;document.getElementById('eType').value=s.type;document.getElementById('eOp').value=s.op;document.getElementById('eMgr').value=s.mgr;document.getElementById('eTel').value=s.tel;document.getElementById('eNote').value='';
+  editId=id; editShelterBackendId=null;
+  const s=shelters.find(x=>x.id===id);
+  if(window.SAFESPOT_CONFIG.apiMode==='real'){
+    var found=backendShelters.find(function(x){return x.shelterName===s.name;});
+    editShelterBackendId=found?found.shelterId:null;
+  }
+  document.getElementById('eNm').value=s.name;document.getElementById('eAddr').value=s.addr;document.getElementById('eCap').value=s.cap;document.getElementById('eType').value=s.type;document.getElementById('eOp').value=s.op;document.getElementById('eMgr').value=s.mgr;document.getElementById('eTel').value=s.tel;document.getElementById('eReason').value='';document.getElementById('eNote').value='';
   document.getElementById('editModal').classList.add('open');
 }
-function saveEdit(){
+async function saveEdit(){
   const s=shelters.find(x=>x.id===editId);
-  s.name=document.getElementById('eNm').value;s.addr=document.getElementById('eAddr').value;s.cap=parseInt(document.getElementById('eCap').value)||s.cap;s.type=document.getElementById('eType').value;s.op=document.getElementById('eOp').value;s.mgr=document.getElementById('eMgr').value;s.tel=document.getElementById('eTel').value;
-  document.getElementById('editModal').classList.remove('open');renderAll();alert('저장되었습니다.'); // [더미] 저장 성공 후 PATCH /api/admin/shelters/{id} 응답 처리 필요
+  const newCap=parseInt(document.getElementById('eCap').value)||s.cap;
+  if(window.SAFESPOT_CONFIG.apiMode==='real'){
+    const reason=document.getElementById('eReason').value.trim();
+    if(!reason){alert('수정 사유를 입력하세요.');return;}
+    if(!editShelterBackendId){alert('대피소 서버 ID를 확인할 수 없습니다. 페이지를 새로고침 후 시도하세요.');return;}
+    try{
+      await apiPatchShelter(editShelterBackendId,newCap,reason);
+      s.name=document.getElementById('eNm').value;s.addr=document.getElementById('eAddr').value;s.cap=newCap;s.type=document.getElementById('eType').value;s.op=document.getElementById('eOp').value;s.mgr=document.getElementById('eMgr').value;s.tel=document.getElementById('eTel').value;
+      document.getElementById('editModal').classList.remove('open');renderAll();alert('저장되었습니다.');
+    }catch(e){
+      if(e.status===403) alert('관리자 권한이 필요합니다.');
+      else alert('저장에 실패했습니다: '+e.message);
+    }
+    return;
+  }
+  s.name=document.getElementById('eNm').value;s.addr=document.getElementById('eAddr').value;s.cap=newCap;s.type=document.getElementById('eType').value;s.op=document.getElementById('eOp').value;s.mgr=document.getElementById('eMgr').value;s.tel=document.getElementById('eTel').value;
+  document.getElementById('editModal').classList.remove('open');renderAll();alert('저장되었습니다.');
 }
 function toggleOp(id){const s=shelters.find(x=>x.id===id);const n=s.op==='운영 중'?'운영 중단':'운영 중';if(confirm(`"${s.name}"을(를) "${n}"으로 변경하시겠습니까?`)){s.op=n;renderAll();}}
 </script>
