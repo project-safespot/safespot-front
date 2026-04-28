@@ -445,6 +445,57 @@ function apiErrorMsg(e){
   return '정보를 불러올 수 없습니다.';
 }
 
+function formatKstDateTime(isoString){
+  if(!isoString) return '기준 시각 없음';
+  var date = new Date(isoString);
+  if(Number.isNaN(date.getTime())) return '기준 시각 없음';
+  var parts = new Intl.DateTimeFormat('ko-KR', {
+    timeZone: 'Asia/Seoul',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false
+  }).formatToParts(date);
+  var m = {};
+  parts.forEach(function(p){ m[p.type] = p.value; });
+  return m.year + '-' + m.month + '-' + m.day + ' ' + m.hour + ':' + m.minute + ' 기준';
+}
+
+function formatAgeFromNow(isoString){
+  if(!isoString) return '';
+  var date = new Date(isoString);
+  if(Number.isNaN(date.getTime())) return '';
+  var diffMs = Date.now() - date.getTime();
+  if(diffMs < 0) return '방금 전';
+  var totalMinutes = Math.floor(diffMs / 60000);
+  var days = Math.floor(totalMinutes / 1440);
+  var hours = Math.floor((totalMinutes % 1440) / 60);
+  var minutes = totalMinutes % 60;
+  if(days > 0) return days + '일 ' + hours + '시간 전';
+  if(hours > 0) return hours + '시간 ' + minutes + '분 전';
+  if(minutes > 0) return minutes + '분 전';
+  return '방금 전';
+}
+
+// Local MVP display threshold.
+// Backend ingestion/rebuild freshness policy must be finalized separately.
+var STALE_THRESHOLDS_MINUTES = { weather: 180, airQuality: 180 };
+
+function getFreshnessStatus(isoString, thresholdMinutes){
+  if(!isoString) return { status:'unknown', label:'기준 시각 없음' };
+  var date = new Date(isoString);
+  if(Number.isNaN(date.getTime())) return { status:'unknown', label:'기준 시각 오류' };
+  var diffMinutes = Math.floor((Date.now() - date.getTime()) / 60000);
+  if(diffMinutes > thresholdMinutes) return { status:'stale', label:'최신 데이터 아님' };
+  return { status:'fresh', label:'정상 수집' };
+}
+
+function staleBadge(freshness){
+  if(freshness.status === 'stale')
+    return '<span style="background:#fff3e0;border:1px solid #e67e22;color:#e67e22;font-size:11px;font-weight:700;padding:2px 7px;margin-left:6px;">최신 데이터 아님</span>';
+  if(freshness.status === 'unknown')
+    return '<span style="background:#f5f5f5;border:1px solid #bbb;color:#888;font-size:11px;padding:2px 7px;margin-left:6px;">기준 시각 없음</span>';
+  return '';
+}
+
 async function fetchWeather(){
   document.getElementById('weatherBody').innerHTML = emptyState('날씨 정보를 불러오는 중입니다.');
   try{
@@ -455,19 +506,21 @@ async function fetchWeather(){
       return;
     }
     var d = json.data;
-    var temp = d.temperature != null ? Number(d.temperature).toFixed(1) : '-';
-    var cond = d.weatherCondition || '-';
-    var time = d.forecastedAt ? d.forecastedAt.slice(0,16).replace('T',' ') : '';
+    var temp = d.temperature != null ? Number(d.temperature).toFixed(1) : null;
+    var rawCond = d.weatherCondition;
+    var cond = (rawCond && rawCond !== '알수없음') ? rawCond : null;
     var region = d.region || '서울';
+    var freshness = getFreshnessStatus(d.forecastedAt, STALE_THRESHOLDS_MINUTES.weather);
+    var kstTime = formatKstDateTime(d.forecastedAt);
+    var age = formatAgeFromNow(d.forecastedAt);
+    var timeLine = kstTime + (age ? ' · ' + age : '') + staleBadge(freshness);
     document.getElementById('weatherBody').innerHTML =
       '<div class="w-row"><div class="w-icon">🌡️</div><div>' +
-      '<div class="w-temp">' + temp + '<sup>°C</sup></div>' +
-      '<div class="w-desc">' + cond + '</div>' +
-      '<div class="w-loc">📍 ' + region + '</div>' +
+      '<div class="w-temp">' + (temp !== null ? temp + '<sup>°C</sup>' : '<span style="font-size:18px;color:#bbb;">기온 정보 없음</span>') + '</div>' +
+      '<div class="w-desc">날씨 상태: ' + (cond || '정보 없음') + '</div>' +
+      '<div class="w-loc">📍 지역: ' + region + '</div>' +
       '</div></div>' +
-      '<div class="w-cells">' +
-      '<div class="w-cell"><div class="v" style="font-size:12px">' + (time||'-') + '</div><div class="k">기준 시각</div></div>' +
-      '</div>';
+      '<div style="font-size:12px;color:#888;margin-top:10px;line-height:1.8;">' + timeLine + '</div>';
   }catch(e){
     console.warn('[weather-alerts]', e.status || '', e.message);
     document.getElementById('weatherBody').innerHTML = emptyState(apiErrorMsg(e));
@@ -484,20 +537,30 @@ async function fetchAirQuality(){
       return;
     }
     var d = json.data;
-    var grade = d.khaiGrade || '-';
-    var val = d.khaiValue != null ? d.khaiValue : '-';
-    var station = d.stationName || '-';
-    var measuredAt = d.measuredAt ? d.measuredAt.slice(0,16).replace('T',' ') : '';
+    var grade = (d.khaiGrade && d.khaiGrade !== '') ? d.khaiGrade : null;
+    var val = (d.khaiValue != null) ? d.khaiValue : null;
+    var station = d.stationName || null;
+    var freshness = getFreshnessStatus(d.measuredAt, STALE_THRESHOLDS_MINUTES.airQuality);
+    var kstTime = formatKstDateTime(d.measuredAt);
+    var age = formatAgeFromNow(d.measuredAt);
+    var timeLine = kstTime + (age ? ' · ' + age : '') + staleBadge(freshness);
     var gradeClass = grade === '좋음' ? 'd-g' : (grade === '나쁨' || grade === '매우나쁨') ? 'd-b' : 'd-m';
     document.getElementById('dustBody').innerHTML =
       '<div class="dust-row">' +
-      '<div class="dust-circle"><div class="dv">' + val + '</div><div class="du">AQI</div></div>' +
-      '<div><div class="dust-badge ' + gradeClass + '">' + grade + '</div>' +
-      '<div style="font-size:14px;color:#666;line-height:1.6">측정소: ' + station + '</div></div>' +
-      '</div>' +
+      (val !== null
+        ? '<div class="dust-circle"><div class="dv">' + val + '</div><div class="du">AQI</div></div>'
+        : '<div class="dust-circle" style="border-color:#ccc;"><div class="dv" style="font-size:13px;color:#bbb;line-height:1.3;">정보<br>없음</div></div>'
+      ) +
+      '<div>' +
+      (grade !== null
+        ? '<div class="dust-badge ' + gradeClass + '">' + grade + '</div>'
+        : '<div style="font-size:14px;color:#bbb;margin-bottom:4px;">대기질 등급: 정보 없음</div>'
+      ) +
+      '<div style="font-size:14px;color:#666;line-height:1.6;">측정소: ' + (station || '정보 없음') + '</div>' +
+      '</div></div>' +
       '<div class="dust-grid">' +
-      '<div class="dust-cell"><span class="l">통합대기환경지수</span><span class="v">' + val + '</span></div>' +
-      '<div class="dust-cell"><span class="l">측정 시각</span><span class="v" style="font-size:12px">' + (measuredAt||'-') + '</span></div>' +
+      '<div class="dust-cell"><span class="l">통합대기환경지수</span><span class="v">' + (val !== null ? val : '정보 없음') + '</span></div>' +
+      '<div class="dust-cell" style="grid-column:1/-1"><span class="l">기준 시각</span><span class="v" style="font-size:12px;">' + timeLine + '</span></div>' +
       '</div>';
   }catch(e){
     console.warn('[air-quality]', e.status || '', e.message);
