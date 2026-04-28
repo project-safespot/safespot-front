@@ -427,13 +427,82 @@ function emptyState(message){
   return '<div style="padding:24px 10px;text-align:center;color:#888;font-size:14px;line-height:1.7;">' + message + '</div>';
 }
 
-function setUnconnectedSections(){
-  document.getElementById('weatherBody').innerHTML = emptyState('날씨 API가 아직 연결되지 않았습니다.<br><strong style="color:var(--navy);">실데이터 미연결</strong>');
-  document.getElementById('dustBody').innerHTML = emptyState('대기질 API가 아직 연결되지 않았습니다.<br><strong style="color:var(--navy);">실데이터 미연결</strong>');
-  document.getElementById('clItems').innerHTML = emptyState('체크리스트 백엔드 저장 기능이 아직 연결되지 않았습니다.');
-  document.getElementById('pTxt').textContent = '실데이터 미연결';
-  document.getElementById('pFill').style.width = '0%';
-  document.querySelectorAll('.cat-btn').forEach(function(btn){ btn.disabled = true; });
+function buildQuery(params){
+  var sp = new URLSearchParams();
+  Object.keys(params || {}).forEach(function(k){
+    var v = params[k];
+    if(v !== undefined && v !== null && v !== '') sp.set(k, String(v));
+  });
+  var q = sp.toString();
+  return q ? ('?' + q) : '';
+}
+
+function apiErrorMsg(e){
+  if(!e) return '정보를 불러올 수 없습니다.';
+  if(e.status >= 500) return '서버에서 정보를 불러오지 못했습니다.';
+  if(e.status === 400) return '요청 파라미터 오류입니다.';
+  if(e.message === 'Failed to fetch') return '네트워크 연결을 확인하세요.';
+  return '정보를 불러올 수 없습니다.';
+}
+
+async function fetchWeather(){
+  document.getElementById('weatherBody').innerHTML = emptyState('날씨 정보를 불러오는 중입니다.');
+  try{
+    var query = buildQuery({ region: '서울' });
+    var json = await SafeSpotApi.request({ service:'public', path:'/weather-alerts' + query });
+    if(!json.success || !json.data){
+      document.getElementById('weatherBody').innerHTML = emptyState('날씨 정보가 아직 수집되지 않았습니다.');
+      return;
+    }
+    var d = json.data;
+    var temp = d.temperature != null ? Number(d.temperature).toFixed(1) : '-';
+    var cond = d.weatherCondition || '-';
+    var time = d.forecastedAt ? d.forecastedAt.slice(0,16).replace('T',' ') : '';
+    var region = d.region || '서울';
+    document.getElementById('weatherBody').innerHTML =
+      '<div class="w-row"><div class="w-icon">🌡️</div><div>' +
+      '<div class="w-temp">' + temp + '<sup>°C</sup></div>' +
+      '<div class="w-desc">' + cond + '</div>' +
+      '<div class="w-loc">📍 ' + region + '</div>' +
+      '</div></div>' +
+      '<div class="w-cells">' +
+      '<div class="w-cell"><div class="v" style="font-size:12px">' + (time||'-') + '</div><div class="k">기준 시각</div></div>' +
+      '</div>';
+  }catch(e){
+    console.warn('[weather-alerts]', e.status || '', e.message);
+    document.getElementById('weatherBody').innerHTML = emptyState(apiErrorMsg(e));
+  }
+}
+
+async function fetchAirQuality(){
+  document.getElementById('dustBody').innerHTML = emptyState('대기질 정보를 불러오는 중입니다.');
+  try{
+    var query = buildQuery({ region: '서울' });
+    var json = await SafeSpotApi.request({ service:'public', path:'/air-quality' + query });
+    if(!json.success || !json.data){
+      document.getElementById('dustBody').innerHTML = emptyState('대기질 정보가 아직 수집되지 않았습니다.');
+      return;
+    }
+    var d = json.data;
+    var grade = d.khaiGrade || '-';
+    var val = d.khaiValue != null ? d.khaiValue : '-';
+    var station = d.stationName || '-';
+    var measuredAt = d.measuredAt ? d.measuredAt.slice(0,16).replace('T',' ') : '';
+    var gradeClass = grade === '좋음' ? 'd-g' : (grade === '나쁨' || grade === '매우나쁨') ? 'd-b' : 'd-m';
+    document.getElementById('dustBody').innerHTML =
+      '<div class="dust-row">' +
+      '<div class="dust-circle"><div class="dv">' + val + '</div><div class="du">AQI</div></div>' +
+      '<div><div class="dust-badge ' + gradeClass + '">' + grade + '</div>' +
+      '<div style="font-size:14px;color:#666;line-height:1.6">측정소: ' + station + '</div></div>' +
+      '</div>' +
+      '<div class="dust-grid">' +
+      '<div class="dust-cell"><span class="l">통합대기환경지수</span><span class="v">' + val + '</span></div>' +
+      '<div class="dust-cell"><span class="l">측정 시각</span><span class="v" style="font-size:12px">' + (measuredAt||'-') + '</span></div>' +
+      '</div>';
+  }catch(e){
+    console.warn('[air-quality]', e.status || '', e.message);
+    document.getElementById('dustBody').innerHTML = emptyState(apiErrorMsg(e));
+  }
 }
 
 function mapDashboardAlert(a){
@@ -504,8 +573,8 @@ async function loadDashboardShelters(){
   var el = document.getElementById('nearbyShelters');
   el.innerHTML = emptyState('대피소 정보를 불러오는 중입니다.');
   try{
-    var qs = 'lat=' + DASHBOARD_CENTER.lat + '&lng=' + DASHBOARD_CENTER.lng + '&radius=5000';
-    var json = await SafeSpotApi.request({ service:'public', path:'/shelters/nearby?' + qs, method:'GET' });
+    var qs = buildQuery({ lat: DASHBOARD_CENTER.lat, lng: DASHBOARD_CENTER.lng, radius: 5000 });
+    var json = await SafeSpotApi.request({ service:'public', path:'/shelters/nearby' + qs, method:'GET' });
     if(!json.success) throw new Error((json.error && json.error.message) || 'SERVER_ERROR');
     var shelters = ((json.data && json.data.items) || []).map(mapDashboardShelter).slice(0,4);
     if(!shelters.length){
@@ -527,7 +596,12 @@ async function loadDashboardShelters(){
 function initRealDashboard(){
   var meta = document.querySelector('.page-hero-meta');
   if(meta) meta.innerHTML = '<span>📡 일부 실시간 연동</span><span>📍 서울시청 기준</span>';
-  setUnconnectedSections();
+  document.getElementById('clItems').innerHTML = emptyState('체크리스트 백엔드 저장 기능이 아직 연결되지 않았습니다.');
+  document.getElementById('pTxt').textContent = '실데이터 미연결';
+  document.getElementById('pFill').style.width = '0%';
+  document.querySelectorAll('.cat-btn').forEach(function(btn){ btn.disabled = true; });
+  fetchWeather();
+  fetchAirQuality();
   loadDashboardAlerts();
   loadDashboardShelters();
 }
