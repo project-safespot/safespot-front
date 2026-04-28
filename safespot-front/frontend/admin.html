@@ -380,6 +380,7 @@ async function loadAdminDashboard(){
     residents=[];
     updateResidentShelterOptions();
     renderAll();
+    await loadResidents();
   }catch(e){
     if(e.status===403) alert('관리자 권한이 필요합니다.');
     else showAdminErrorState('관리자 대시보드 데이터를 불러올 수 없습니다.');
@@ -411,6 +412,45 @@ async function apiExitEntry(entryId,reason){
 
 async function apiPatchShelter(shelterId,capacityTotal,reason){
   return SafeSpotApi.request({service:'core',path:'/admin/shelters/'+shelterId,method:'PATCH',auth:true,body:{capacityTotal:capacityTotal,reason:reason}});
+}
+
+// EvacuationEntryItem → 로컬 resident 포맷 변환
+// fields: entryId, visitorName, visitorPhone, entryStatus, enteredAt, note
+//         detail.{ address, familyInfo, healthStatus, specialProtectionFlag }
+function mapResident(item,shelterName){
+  var d=item.detail||{};
+  return {
+    id:item.entryId,
+    nm:item.visitorName||'',
+    rrn:'',
+    tel:item.visitorPhone||'',
+    addr:d.address||'',
+    family:d.familyInfo||'',
+    health:d.healthStatus||'이상 없음',
+    special:d.specialProtectionFlag?'Y':'N',
+    shelter:shelterName,
+    room:'',
+    time:item.enteredAt?(item.enteredAt.slice(0,16).replace('T',' ')):''
+  };
+}
+
+async function loadResidents(){
+  document.getElementById('resBody').innerHTML='<tr><td colspan="12" style="text-align:center;padding:24px;color:#888;">입소자 데이터를 불러오는 중입니다.</td></tr>';
+  try{
+    var results=await Promise.all(shelters.map(function(s){
+      return SafeSpotApi.request({service:'core',path:'/admin/evacuation-entries?shelterId='+s.id,auth:true})
+        .then(function(json){
+          if(!json.success) return [];
+          return ((json.data&&json.data.items)||[]).map(function(item){return mapResident(item,s.name);});
+        })
+        .catch(function(){return [];});
+    }));
+    residents=[].concat.apply([],results);
+    renderResidents();
+    updateSum();
+  }catch(e){
+    document.getElementById('resBody').innerHTML='<tr><td colspan="12" style="text-align:center;padding:24px;color:#c00;">입소자 데이터를 불러올 수 없습니다.</td></tr>';
+  }
 }
 function initDash(name){
   document.getElementById('adminNameDisp').textContent=name||'관리자';
