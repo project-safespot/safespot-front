@@ -418,7 +418,7 @@ function mapShelterNearby(s) {
     lng:          s.longitude,
     tel:          '',
     facility:     '',
-    status:       s.shelterStatus === 'OPEN' ? 'open' : s.shelterStatus === 'FULL' ? 'full' : 'ready'
+    status:       (s.shelterStatus === 'OPEN' || s.shelterStatus === 'OPERATING') ? 'open' : s.shelterStatus === 'FULL' ? 'full' : 'ready'
   };
 }
 
@@ -439,7 +439,7 @@ function mapShelterDetail(s) {
     lng:          s.longitude,
     tel:          s.contact || '',
     facility:     s.note || '',
-    status:       s.shelterStatus === 'OPEN' ? 'open' : s.shelterStatus === 'FULL' ? 'full' : 'ready'
+    status:       (s.shelterStatus === 'OPEN' || s.shelterStatus === 'OPERATING') ? 'open' : s.shelterStatus === 'FULL' ? 'full' : 'ready'
   };
 }
 
@@ -674,9 +674,13 @@ function renderMarkers(){
   markers = [];
 
   filteredShelters.forEach(s => {
+    const lat = Number(s.lat);
+    const lng = Number(s.lng);
+    if(!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+
     const overlay = new kakao.maps.CustomOverlay({
       content: `<div class="mk ${mkClass(s.status)}" onclick="selectShelter(${s.id})" style="cursor:pointer;">${s.cur >= s.cap ? '!' : ''}</div>`,
-      position: new kakao.maps.LatLng(s.lat, s.lng),
+      position: new kakao.maps.LatLng(lat, lng),
       yAnchor: 0.5,
       xAnchor: 0.5
     });
@@ -873,6 +877,15 @@ function hdrSearch(){
 
 initHeader();
 
+function showMapFallback(msg){
+  var el = document.getElementById('map');
+  if(el) el.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;min-height:300px;color:#888;font-size:14px;text-align:center;padding:20px;">' + (msg || '지도를 불러오지 못했습니다.') + '</div>';
+}
+
+if(!window.kakao || !window.kakao.maps){
+  console.warn('Kakao Maps SDK is not loaded.');
+  showMapFallback('지도를 불러오지 못했습니다.<br>Kakao JavaScript key와 플랫폼 도메인을 확인하세요.');
+} else {
 kakao.maps.load(function(){
   var mapContainer = document.getElementById('map');
   var mapOption = {
@@ -894,6 +907,7 @@ kakao.maps.load(function(){
     map.setCenter(new kakao.maps.LatLng(37.5665, 126.9780));
   }, 100);
 });
+} // end kakao guard
 
 
 </script>
