@@ -100,7 +100,7 @@ jobs:
           SHORT_SHA: ${{ needs.build.outputs.short-sha }}
         run: |
           cd k8s-manifest
-          yq e '.nginx.image.tag = strenv(SHORT_SHA)' -i charts/safespot/values-dev.yaml
+          yq e '.nginx.image.tag = strenv(SHORT_SHA)' -i charts/safespot/values-aws-dev.yaml
 
       - name: Commit and push if changed
         env:
