@@ -8,6 +8,7 @@
 <script src="config.js"></script>
 <script src="js/auth.js"></script>
 <script src="js/api-client.js"></script>
+<script src="js/status-mapper.js"></script>
 <style>
 /* page-hero defined in _common.css */
 
@@ -483,7 +484,6 @@ function showDetail(id){
 // Backend fields: alertId, level (DISASTER|WARNING|INFO|SAFE), disasterType, region, message, issuedAt, expiredAt
 function mapAlert(a) {
   var LEVEL_KO  = { DISASTER: '재난위기경보', WARNING: '호우·강풍 특보', INFO: '안전 안내', SAFE: '해제·정상화' };
-  var DTYPE_KO  = { EARTHQUAKE: '지진', FLOOD: '홍수', LANDSLIDE: '산사태' };
   var lvKey = (a.level || '').toUpperCase();
   var lv    = { DISASTER: 'disaster', WARNING: 'warning', INFO: 'info', SAFE: 'safe' }[lvKey] || 'info';
   return {
@@ -498,7 +498,7 @@ function mapAlert(a) {
     detail: {
       발송기관: '',
       수신지역: a.region || '',
-      재난유형: DTYPE_KO[a.disasterType] || a.disasterType || '',
+      재난유형: formatDisasterType(a.disasterType),
       경보단계: LEVEL_KO[lvKey] || a.level || '',
       대피소:   '',
       행동요령: ''

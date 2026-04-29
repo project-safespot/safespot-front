@@ -8,6 +8,7 @@
 <script src="config.js"></script>
 <script src="js/auth.js"></script>
 <script src="js/api-client.js"></script>
+<script src="js/status-mapper.js"></script>
 <style>
 header{background:#1a2a4a;}
 .h-logo-texts strong{color:#fff;}
@@ -186,7 +187,7 @@ tbody td{padding:11px 13px;font-size:15px;}
     <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
       <input type="text" id="manSrch" placeholder="대피소명·주소 검색..." style="border:1px solid #ccc;padding:9px 12px;font-size:15px;font-family:inherit;outline:none;width:260px;" oninput="renderManage()">
       <select id="manSt" style="border:1px solid #ccc;padding:9px 12px;font-size:15px;font-family:inherit;outline:none;" onchange="renderManage()"><option value="all">전체 상태</option><option>여유</option><option>보통</option><option>혼잡</option></select>
-      <select id="manOp" style="border:1px solid #ccc;padding:9px 12px;font-size:15px;font-family:inherit;outline:none;" onchange="renderManage()"><option value="all">전체 운영</option><option>운영 중</option><option>운영 중단</option><option>점검 중</option></select>
+      <select id="manOp" style="border:1px solid #ccc;padding:9px 12px;font-size:15px;font-family:inherit;outline:none;" onchange="renderManage()"><option value="all">전체 운영</option><option>운영중</option><option>운영중단</option><option>준비중</option></select>
     </div>
     <div class="tbl-wrap"><table><thead><tr><th>No.</th><th>대피소명</th><th>주소</th><th>수용</th><th>현재</th><th>혼잡도</th><th>상태</th><th>운영</th><th>담당자</th><th>연락처</th><th>관리</th></tr></thead><tbody id="manBody"></tbody></table></div>
   </div>
@@ -301,7 +302,7 @@ tbody td{padding:11px 13px;font-size:15px;}
         <div class="mf-row full"><label>주소</label><input type="text" id="eAddr"></div>
         <div class="mf-row"><label>수용 인원 (명)</label><input type="number" id="eCap"></div>
         <div class="mf-row"><label>대피소 유형</label><select id="eType"><option>민방위 대피소</option><option>재난 대피소</option><option>지하철 대피소</option><option>임시 대피소</option></select></div>
-        <div class="mf-row"><label>운영 상태</label><select id="eOp"><option>운영 중</option><option>운영 중단</option><option>점검 중</option><option>만원</option></select></div>
+        <div class="mf-row"><label>운영 상태</label><select id="eOp"><option>운영중</option><option>운영중단</option><option>준비중</option></select></div>
         <div class="mf-row"><label>담당자</label><input type="text" id="eMgr"></div>
         <div class="mf-row"><label>연락처</label><input type="text" id="eTel"></div>
         <div class="mf-row full"><label>수정 사유 <span style="color:var(--red)">*</span></label><input type="text" id="eReason" placeholder="수정 사유를 입력하세요"></div>
@@ -388,7 +389,7 @@ async function loadAdminDashboard(){
 }
 
 function mapAdminShelter(s){
-  var op=s.shelterStatus==='CLOSED'?'운영 중단':s.shelterStatus==='MAINTENANCE'?'점검 중':'운영 중';
+  var op=formatShelterStatus(s.shelterStatus);
   return {
     id:s.shelterId,
     name:s.shelterName,
@@ -430,7 +431,8 @@ function mapResident(item,shelterName){
     special:d.specialProtectionFlag?'Y':'N',
     shelter:shelterName,
     room:'',
-    time:item.enteredAt?(item.enteredAt.slice(0,16).replace('T',' ')):''
+    time:item.enteredAt?(item.enteredAt.slice(0,16).replace('T',' ')):'',
+    status:formatEntryStatus(item.entryStatus)
   };
 }
 
@@ -512,30 +514,30 @@ function showAdminErrorState(message){
 
 /* ── 대피소 데이터 ── */
 const MOCK_ADMIN_SHELTERS=[
-  {id:1,name:'역삼동 주민센터 대피소',addr:'강남구 역삼동 736',cap:300,cur:85,type:'민방위 대피소',op:'운영 중',mgr:'이담당',tel:'02-3423-5114'},
-  {id:2,name:'강남구민회관',addr:'강남구 삼성동 142',cap:500,cur:415,type:'민방위 대피소',op:'운영 중',mgr:'박담당',tel:'02-3423-6000'},
-  {id:3,name:'역삼초등학교 체육관',addr:'강남구 역삼동 648',cap:200,cur:182,type:'재난 대피소',op:'운영 중',mgr:'최담당',tel:'02-565-1234'},
-  {id:4,name:'대치2동 복지센터',addr:'강남구 대치2동 988',cap:150,cur:42,type:'민방위 대피소',op:'운영 중',mgr:'정담당',tel:'02-3423-7200'},
-  {id:5,name:'선릉역 대피 공간',addr:'강남구 역삼동 지하1층',cap:800,cur:520,type:'지하철 대피소',op:'운영 중',mgr:'김담당',tel:'1544-7788'},
-  {id:6,name:'삼성동 종합사회복지관',addr:'강남구 삼성1동 130',cap:250,cur:218,type:'재난 대피소',op:'운영 중',mgr:'이담당',tel:'02-3452-5678'},
-  {id:7,name:'개포동 주민센터 대피소',addr:'강남구 개포1동 154',cap:180,cur:61,type:'민방위 대피소',op:'운영 중',mgr:'박담당',tel:'02-3423-4000'},
-  {id:8,name:'압구정동 지하주차장 대피소',addr:'강남구 압구정동 454',cap:600,cur:480,type:'재난 대피소',op:'운영 중',mgr:'최담당',tel:'-'},
-  {id:9,name:'청담동 문화센터',addr:'강남구 청담동 118',cap:220,cur:110,type:'민방위 대피소',op:'운영 중',mgr:'정담당',tel:'02-3445-1234'},
-  {id:10,name:'논현2동 주민센터',addr:'강남구 논현2동 22',cap:130,cur:38,type:'민방위 대피소',op:'운영 중',mgr:'김담당',tel:'02-3423-2300'},
-  {id:11,name:'도곡동 주민센터 대피소',addr:'강남구 도곡1동 467',cap:160,cur:88,type:'민방위 대피소',op:'운영 중',mgr:'이담당',tel:'02-3423-8100'},
-  {id:12,name:'일원동 복지관 지하',addr:'강남구 일원1동 642',cap:200,cur:165,type:'재난 대피소',op:'운영 중',mgr:'박담당',tel:'02-3461-2000'},
-  {id:13,name:'수서역 광장 임시 대피소',addr:'강남구 수서동 730',cap:1000,cur:340,type:'임시 대피소',op:'운영 중',mgr:'최담당',tel:'02-445-0100'},
-  {id:14,name:'세곡동 주민센터',addr:'강남구 세곡동 91',cap:120,cur:29,type:'민방위 대피소',op:'운영 중',mgr:'정담당',tel:'02-3423-9200'},
-  {id:15,name:'코엑스 지하 광장',addr:'강남구 삼성동 159',cap:2000,cur:1640,type:'지하철 대피소',op:'운영 중',mgr:'박담당',tel:'02-6000-0114'},
-  {id:16,name:'율현동 율현초 체육관',addr:'강남구 율현동 1',cap:250,cur:198,type:'재난 대피소',op:'운영 중',mgr:'이담당',tel:'02-459-3300'},
-  {id:17,name:'신사동 복합시설 지하',addr:'강남구 신사동 527',cap:400,cur:87,type:'재난 대피소',op:'운영 중',mgr:'김담당',tel:'02-3449-4114'},
-  {id:18,name:'논현1동 주민센터',addr:'강남구 논현1동 105',cap:140,cur:61,type:'민방위 대피소',op:'운영 중',mgr:'최담당',tel:'02-3423-2100'},
-  {id:19,name:'삼성2동 주민센터',addr:'강남구 삼성2동 186',cap:130,cur:44,type:'민방위 대피소',op:'점검 중',mgr:'정담당',tel:'02-3423-6200'},
-  {id:20,name:'대치4동 주민센터',addr:'강남구 대치4동 956',cap:150,cur:112,type:'민방위 대피소',op:'운영 중',mgr:'김담당',tel:'02-3423-7400'},
-  {id:21,name:'개포3동 주민센터',addr:'강남구 개포3동 1168',cap:120,cur:31,type:'민방위 대피소',op:'운영 중',mgr:'이담당',tel:'02-3423-4200'},
-  {id:22,name:'압구정현대아파트 지하',addr:'강남구 압구정동 478',cap:500,cur:122,type:'재난 대피소',op:'운영 중',mgr:'박담당',tel:'-'},
-  {id:23,name:'양재1동 주민센터',addr:'강남구 양재1동 245',cap:160,cur:73,type:'민방위 대피소',op:'운영 중',mgr:'정담당',tel:'02-3413-8100'},
-  {id:24,name:'자곡동 어울림센터',addr:'강남구 자곡동 185',cap:180,cur:55,type:'민방위 대피소',op:'운영 중',mgr:'김담당',tel:'02-3461-5500'},
+  {id:1,name:'역삼동 주민센터 대피소',addr:'강남구 역삼동 736',cap:300,cur:85,type:'민방위 대피소',op:'운영중',mgr:'이담당',tel:'02-3423-5114'},
+  {id:2,name:'강남구민회관',addr:'강남구 삼성동 142',cap:500,cur:415,type:'민방위 대피소',op:'운영중',mgr:'박담당',tel:'02-3423-6000'},
+  {id:3,name:'역삼초등학교 체육관',addr:'강남구 역삼동 648',cap:200,cur:182,type:'재난 대피소',op:'운영중',mgr:'최담당',tel:'02-565-1234'},
+  {id:4,name:'대치2동 복지센터',addr:'강남구 대치2동 988',cap:150,cur:42,type:'민방위 대피소',op:'운영중',mgr:'정담당',tel:'02-3423-7200'},
+  {id:5,name:'선릉역 대피 공간',addr:'강남구 역삼동 지하1층',cap:800,cur:520,type:'지하철 대피소',op:'운영중',mgr:'김담당',tel:'1544-7788'},
+  {id:6,name:'삼성동 종합사회복지관',addr:'강남구 삼성1동 130',cap:250,cur:218,type:'재난 대피소',op:'운영중',mgr:'이담당',tel:'02-3452-5678'},
+  {id:7,name:'개포동 주민센터 대피소',addr:'강남구 개포1동 154',cap:180,cur:61,type:'민방위 대피소',op:'운영중',mgr:'박담당',tel:'02-3423-4000'},
+  {id:8,name:'압구정동 지하주차장 대피소',addr:'강남구 압구정동 454',cap:600,cur:480,type:'재난 대피소',op:'운영중',mgr:'최담당',tel:'-'},
+  {id:9,name:'청담동 문화센터',addr:'강남구 청담동 118',cap:220,cur:110,type:'민방위 대피소',op:'운영중',mgr:'정담당',tel:'02-3445-1234'},
+  {id:10,name:'논현2동 주민센터',addr:'강남구 논현2동 22',cap:130,cur:38,type:'민방위 대피소',op:'운영중',mgr:'김담당',tel:'02-3423-2300'},
+  {id:11,name:'도곡동 주민센터 대피소',addr:'강남구 도곡1동 467',cap:160,cur:88,type:'민방위 대피소',op:'운영중',mgr:'이담당',tel:'02-3423-8100'},
+  {id:12,name:'일원동 복지관 지하',addr:'강남구 일원1동 642',cap:200,cur:165,type:'재난 대피소',op:'운영중',mgr:'박담당',tel:'02-3461-2000'},
+  {id:13,name:'수서역 광장 임시 대피소',addr:'강남구 수서동 730',cap:1000,cur:340,type:'임시 대피소',op:'운영중',mgr:'최담당',tel:'02-445-0100'},
+  {id:14,name:'세곡동 주민센터',addr:'강남구 세곡동 91',cap:120,cur:29,type:'민방위 대피소',op:'운영중',mgr:'정담당',tel:'02-3423-9200'},
+  {id:15,name:'코엑스 지하 광장',addr:'강남구 삼성동 159',cap:2000,cur:1640,type:'지하철 대피소',op:'운영중',mgr:'박담당',tel:'02-6000-0114'},
+  {id:16,name:'율현동 율현초 체육관',addr:'강남구 율현동 1',cap:250,cur:198,type:'재난 대피소',op:'운영중',mgr:'이담당',tel:'02-459-3300'},
+  {id:17,name:'신사동 복합시설 지하',addr:'강남구 신사동 527',cap:400,cur:87,type:'재난 대피소',op:'운영중',mgr:'김담당',tel:'02-3449-4114'},
+  {id:18,name:'논현1동 주민센터',addr:'강남구 논현1동 105',cap:140,cur:61,type:'민방위 대피소',op:'운영중',mgr:'최담당',tel:'02-3423-2100'},
+  {id:19,name:'삼성2동 주민센터',addr:'강남구 삼성2동 186',cap:130,cur:44,type:'민방위 대피소',op:'준비중',mgr:'정담당',tel:'02-3423-6200'},
+  {id:20,name:'대치4동 주민센터',addr:'강남구 대치4동 956',cap:150,cur:112,type:'민방위 대피소',op:'운영중',mgr:'김담당',tel:'02-3423-7400'},
+  {id:21,name:'개포3동 주민센터',addr:'강남구 개포3동 1168',cap:120,cur:31,type:'민방위 대피소',op:'운영중',mgr:'이담당',tel:'02-3423-4200'},
+  {id:22,name:'압구정현대아파트 지하',addr:'강남구 압구정동 478',cap:500,cur:122,type:'재난 대피소',op:'운영중',mgr:'박담당',tel:'-'},
+  {id:23,name:'양재1동 주민센터',addr:'강남구 양재1동 245',cap:160,cur:73,type:'민방위 대피소',op:'운영중',mgr:'정담당',tel:'02-3413-8100'},
+  {id:24,name:'자곡동 어울림센터',addr:'강남구 자곡동 185',cap:180,cur:55,type:'민방위 대피소',op:'운영중',mgr:'김담당',tel:'02-3461-5500'},
 ];
 
 let shelters=(window.SafeSpotConfig && window.SafeSpotConfig.isMockMode()) ? MOCK_ADMIN_SHELTERS.slice() : [];
@@ -543,11 +545,11 @@ let shelters=(window.SafeSpotConfig && window.SafeSpotConfig.isMockMode()) ? MOC
 /* ── 입소자 데이터 ── */
 // [더미] GET /api/admin/evacuation-entries?shelterId={id}&status=ENTERED 응답으로 교체
 const MOCK_RESIDENTS=[
-  {id:1,nm:'홍길동',rrn:'900101',tel:'010-1234-5678',addr:'강남구 역삼동 123',family:'부부+자녀2명',health:'이상 없음',special:'N',shelter:'역삼동 주민센터 대피소',room:'A동 101호',time:'2026-04-08 09:15'},
-  {id:2,nm:'김순이',rrn:'450823',tel:'010-9876-5432',addr:'강남구 삼성동 45',family:'독거노인',health:'고혈압·당뇨',special:'Y',shelter:'강남구민회관',room:'B동 205호',time:'2026-04-08 09:22'},
-  {id:3,nm:'이민준',rrn:'850312',tel:'010-3456-7890',addr:'강남구 대치동 788',family:'1인가구',health:'이상 없음',special:'N',shelter:'역삼초등학교 체육관',room:'1층 강당',time:'2026-04-08 09:30'},
-  {id:4,nm:'박지수',rrn:'920614',tel:'010-2222-3333',addr:'강남구 압구정동 12',family:'부부+영아1명',health:'이상 없음',special:'Y',shelter:'선릉역 대피 공간',room:'C구역 14번',time:'2026-04-08 09:35'},
-  {id:5,nm:'최영호',rrn:'690905',tel:'010-5555-6666',addr:'강남구 논현동 99',family:'부부',health:'심장질환(관찰 중)',special:'Y',shelter:'강남구민회관',room:'1층 의무실 인근',time:'2026-04-08 09:40'},
+  {id:1,nm:'홍길동',rrn:'900101',tel:'010-1234-5678',addr:'강남구 역삼동 123',family:'부부+자녀2명',health:'이상 없음',special:'N',shelter:'역삼동 주민센터 대피소',room:'A동 101호',time:'2026-04-08 09:15',status:'입소'},
+  {id:2,nm:'김순이',rrn:'450823',tel:'010-9876-5432',addr:'강남구 삼성동 45',family:'독거노인',health:'고혈압·당뇨',special:'Y',shelter:'강남구민회관',room:'B동 205호',time:'2026-04-08 09:22',status:'입소'},
+  {id:3,nm:'이민준',rrn:'850312',tel:'010-3456-7890',addr:'강남구 대치동 788',family:'1인가구',health:'이상 없음',special:'N',shelter:'역삼초등학교 체육관',room:'1층 강당',time:'2026-04-08 09:30',status:'입소'},
+  {id:4,nm:'박지수',rrn:'920614',tel:'010-2222-3333',addr:'강남구 압구정동 12',family:'부부+영아1명',health:'이상 없음',special:'Y',shelter:'선릉역 대피 공간',room:'C구역 14번',time:'2026-04-08 09:35',status:'퇴소'},
+  {id:5,nm:'최영호',rrn:'690905',tel:'010-5555-6666',addr:'강남구 논현동 99',family:'부부',health:'심장질환(관찰 중)',special:'Y',shelter:'강남구민회관',room:'1층 의무실 인근',time:'2026-04-08 09:40',status:'이동'},
 ];
 let residents=(window.SafeSpotConfig && window.SafeSpotConfig.isMockMode()) ? MOCK_RESIDENTS.slice() : [];
 let resIdSeq=6;
@@ -582,7 +584,7 @@ function updateSum(){
 function renderMonitor(){
   document.getElementById('monBody').innerHTML=shelters.map(s=>{
     const p=pct(s),st=getSt(s),col=COL[st];
-    return`<tr><td style="color:var(--muted);font-size:14px">${s.id}</td><td style="font-weight:600">${s.name}</td><td style="font-size:14px;color:var(--muted)">${s.addr}</td><td style="font-size:14px">${s.type}</td><td>${s.cap.toLocaleString()}명</td><td style="font-weight:700;color:${col}">${s.cur.toLocaleString()}명</td><td><div class="mini-bar"><div class="mini-bg"><div class="mini-fill" style="width:${p}%;background:${col}"></div></div><span style="font-weight:700;font-size:14px;color:${col};width:38px">${p}%</span></div></td><td><span class="sb ${SBC[st]}">${st}</span></td><td style="font-size:14px;color:${s.op==='운영 중'?'#27ae60':s.op==='점검 중'?'#e67e22':'var(--red)'};font-weight:600">${s.op}</td><td style="font-size:14px">${s.mgr}</td><td><button class="btn-edit" onclick="openEdit(${s.id})">수정</button></td></tr>`;
+    return`<tr><td style="color:var(--muted);font-size:14px">${s.id}</td><td style="font-weight:600">${s.name}</td><td style="font-size:14px;color:var(--muted)">${s.addr}</td><td style="font-size:14px">${s.type}</td><td>${s.cap.toLocaleString()}명</td><td style="font-weight:700;color:${col}">${s.cur.toLocaleString()}명</td><td><div class="mini-bar"><div class="mini-bg"><div class="mini-fill" style="width:${p}%;background:${col}"></div></div><span style="font-weight:700;font-size:14px;color:${col};width:38px">${p}%</span></div></td><td><span class="sb ${SBC[st]}">${st}</span></td><td style="font-size:14px;color:${s.op==='운영중'?'#27ae60':s.op==='준비중'?'#e67e22':'var(--red)'};font-weight:600">${s.op}</td><td style="font-size:14px">${s.mgr}</td><td><button class="btn-edit" onclick="openEdit(${s.id})">수정</button></td></tr>`;
   }).join('');
 }
 
@@ -612,7 +614,7 @@ function renderManage(){
   if(of!=='all') list=list.filter(s=>s.op===of);
   document.getElementById('manBody').innerHTML=list.map(s=>{
     const p=pct(s),st=getSt(s),col=COL[st];
-    return`<tr><td style="color:var(--muted);font-size:14px">${s.id}</td><td style="font-weight:600">${s.name}</td><td style="font-size:14px;color:var(--muted)">${s.addr}</td><td>${s.cap.toLocaleString()}명</td><td style="font-weight:700;color:${col}">${s.cur.toLocaleString()}명</td><td><span class="sb ${SBC[st]}">${p}%</span></td><td><span class="sb ${SBC[st]}">${st}</span></td><td style="font-weight:600;color:${s.op==='운영 중'?'#27ae60':s.op==='점검 중'?'#e67e22':'var(--red)'}">${s.op}</td><td style="font-size:14px">${s.mgr}</td><td style="font-size:14px">${s.tel}</td><td style="display:flex;gap:4px;flex-wrap:wrap;"><button class="btn-edit" onclick="openEdit(${s.id})">수정</button>${s.op==='운영 중'?`<button class="btn-stop" onclick="toggleOp(${s.id})">중단</button>`:`<button class="btn-open" onclick="toggleOp(${s.id})">재개</button>`}</td></tr>`;
+    return`<tr><td style="color:var(--muted);font-size:14px">${s.id}</td><td style="font-weight:600">${s.name}</td><td style="font-size:14px;color:var(--muted)">${s.addr}</td><td>${s.cap.toLocaleString()}명</td><td style="font-weight:700;color:${col}">${s.cur.toLocaleString()}명</td><td><span class="sb ${SBC[st]}">${p}%</span></td><td><span class="sb ${SBC[st]}">${st}</span></td><td style="font-weight:600;color:${s.op==='운영중'?'#27ae60':s.op==='준비중'?'#e67e22':'var(--red)'}">${s.op}</td><td style="font-size:14px">${s.mgr}</td><td style="font-size:14px">${s.tel}</td><td style="display:flex;gap:4px;flex-wrap:wrap;"><button class="btn-edit" onclick="openEdit(${s.id})">수정</button>${s.op==='운영중'?`<button class="btn-stop" onclick="toggleOp(${s.id})">중단</button>`:`<button class="btn-open" onclick="toggleOp(${s.id})">재개</button>`}</td></tr>`;
   }).join('')||`<tr><td colspan="11" style="text-align:center;padding:24px;color:#aaa;">검색 결과가 없습니다</td></tr>`;
 }
 
@@ -636,7 +638,7 @@ function renderResidents(){
       <td>${r.special==='Y'?'<span class="badge-special">대상</span>':'-'}</td>
       <td style="font-size:14px;font-weight:600;color:var(--navy)">${r.shelter}</td>
       <td style="font-size:14px">${r.room}</td>
-      <td style="font-size:13px;color:var(--muted)">${r.time}</td>
+      <td style="font-size:13px;color:var(--muted)">${r.time}${r.status&&r.status!=='-'?`<br><span class="sb ${r.status==='입소'?'sb-g':r.status==='퇴소'?'sb-r':'sb-y'}">${r.status}</span>`:''}</td>
       <td style="display:flex;gap:4px;">
         <button class="btn-edit" onclick="openResidentModal(${r.id})">수정</button>
         <button class="btn-stop" onclick="delResident(${r.id})">삭제</button>
@@ -758,7 +760,7 @@ async function saveEdit(){
   s.name=document.getElementById('eNm').value;s.addr=document.getElementById('eAddr').value;s.cap=newCap;s.type=document.getElementById('eType').value;s.op=document.getElementById('eOp').value;s.mgr=document.getElementById('eMgr').value;s.tel=document.getElementById('eTel').value;
   document.getElementById('editModal').classList.remove('open');renderAll();alert('저장되었습니다.');
 }
-function toggleOp(id){const s=shelters.find(x=>x.id===id);const n=s.op==='운영 중'?'운영 중단':'운영 중';if(confirm(`"${s.name}"을(를) "${n}"으로 변경하시겠습니까?`)){s.op=n;renderAll();}}
+function toggleOp(id){const s=shelters.find(x=>x.id===id);const n=s.op==='운영중'?'운영중단':'운영중';if(confirm(`"${s.name}"을(를) "${n}"으로 변경하시겠습니까?`)){s.op=n;renderAll();}}
 </script>
 </body>
 </html>

@@ -8,6 +8,7 @@
 <script src="config.js"></script>
 <script src="js/auth.js"></script>
 <script src="js/api-client.js"></script>
+<script src="js/status-mapper.js"></script>
 <link rel="preconnect" href="https://dapi.kakao.com">
 <link rel="preconnect" href="https://map.daumcdn.net">
 <link rel="preconnect" href="https://t1.daumcdn.net">
@@ -418,7 +419,9 @@ function mapShelterNearby(s) {
     lng:          s.longitude,
     tel:          '',
     facility:     '',
-    status:       (s.shelterStatus === 'OPEN' || s.shelterStatus === 'OPERATING') ? 'open' : s.shelterStatus === 'FULL' ? 'full' : 'ready'
+    status:       (s.shelterStatus === 'OPERATING' || s.shelterStatus === 'OPEN') ? 'open' :
+                  s.shelterStatus === 'STOPPED' ? 'stopped' :
+                  s.shelterStatus === 'FULL' ? 'full' : 'ready'
   };
 }
 
@@ -439,7 +442,9 @@ function mapShelterDetail(s) {
     lng:          s.longitude,
     tel:          s.contact || '',
     facility:     s.note || '',
-    status:       (s.shelterStatus === 'OPEN' || s.shelterStatus === 'OPERATING') ? 'open' : s.shelterStatus === 'FULL' ? 'full' : 'ready'
+    status:       (s.shelterStatus === 'OPERATING' || s.shelterStatus === 'OPEN') ? 'open' :
+                  s.shelterStatus === 'STOPPED' ? 'stopped' :
+                  s.shelterStatus === 'FULL' ? 'full' : 'ready'
   };
 }
 
@@ -508,18 +513,18 @@ if(window.SafeSpotConfig && window.SafeSpotConfig.isRealMode()) {
   if(initialCount) initialCount.innerHTML='<strong>0개</strong> 대피소 표시 중';
 }
 
-function statusLabel(s){ return s === 'open' ? '운영중' : s === 'full' ? '수용초과' : '대기중'; }
-function statusBadge(s){ return s === 'open' ? 'badge-open' : s === 'full' ? 'badge-full' : 'badge-ready'; }
-function mkClass(s){ return s === 'open' ? 'mk-open' : s === 'full' ? 'mk-full' : 'mk-ready'; }
+function statusLabel(s){
+  if(s === 'open')    return '운영중';
+  if(s === 'stopped') return '운영중단';
+  if(s === 'full')    return '수용초과';
+  return '준비중';
+}
+function statusBadge(s){ return s === 'open' ? 'badge-open' : (s === 'full' || s === 'stopped') ? 'badge-full' : 'badge-ready'; }
+function mkClass(s){ return s === 'open' ? 'mk-open' : (s === 'full' || s === 'stopped') ? 'mk-full' : 'mk-ready'; }
 function capPercent(cur, cap){ return Math.min(Math.round(cur / cap * 100), 100); }
 function capFillClass(pct){ return pct >= 100 ? 'over' : pct >= 80 ? 'warn' : ''; }
 
-function disasterLabel(d){
-  if(d === 'EARTHQUAKE') return '지진';
-  if(d === 'FLOOD')      return '홍수';
-  if(d === 'LANDSLIDE')  return '산사태';
-  return '';
-}
+function disasterLabel(d){ return formatDisasterType(d) || ''; }
 function disasterBadgeClass(d){
   if(d === 'EARTHQUAKE') return 'badge-earthquake';
   if(d === 'FLOOD')      return 'badge-flood';
