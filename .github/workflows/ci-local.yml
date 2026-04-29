@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [deploy/local]
   pull_request:
-    branches: [main]
+    branches: [deploy/local]
   workflow_dispatch:
 
 permissions:
@@ -80,7 +80,7 @@ jobs:
         with:
           context: .
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ghcr.io/project-safespot/safespot-nginx:${{ steps.sha.outputs.short }}
+          tags: ghcr.io/project-safespot/safespot-nginx:local-${{ steps.sha.outputs.short }}
 
   update-manifest:
     needs: build
