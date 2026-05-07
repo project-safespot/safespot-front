@@ -362,8 +362,11 @@ window.addEventListener('DOMContentLoaded',function(){
 
 /* ── 관리자 API ── */
 var backendShelters=[];
+// Dashboard 로딩 중 resFilter onchange 등으로 loadShelterResidents가 잘못 호출되는 것을 막는 플래그
+var _dashboardLoading=false;
 
 async function loadAdminDashboard(){
+  _dashboardLoading=true;
   showAdminLoadingState();
   try{
     var json=await SafeSpotApi.request({service:'core',path:'/admin/dashboard',auth:true});
@@ -391,6 +394,8 @@ async function loadAdminDashboard(){
     } else {
       showAdminErrorState('관리자 대시보드 데이터를 불러올 수 없습니다.');
     }
+  }finally{
+    _dashboardLoading=false;
   }
 }
 
@@ -444,6 +449,7 @@ function mapResident(item,shelterName,shelterId){
 }
 
 async function loadShelterResidents(shelterId){
+  if(_dashboardLoading) return;
   var s=shelters.find(function(x){return x.id===shelterId;});
   if(!s) return;
   document.getElementById('resBody').innerHTML='<tr><td colspan="12" style="text-align:center;padding:24px;color:#888;">입소자 데이터를 불러오는 중입니다.</td></tr>';
@@ -463,6 +469,7 @@ async function loadShelterResidents(shelterId){
 }
 
 function onResFilterChange(){
+  if(_dashboardLoading) return;
   if(window.SafeSpotConfig && window.SafeSpotConfig.isRealMode()){
     var sf=document.getElementById('resFilter').value;
     if(sf==='all'){
