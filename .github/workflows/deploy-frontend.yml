@@ -1,0 +1,124 @@
+name: Deploy Frontend to S3
+
+# ── Triggers ──────────────────────────────────────────────────────────────────
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+# ── OIDC permission ────────────────────────────────────────────────────────────
+# id-token: write is required for GitHub → AWS OIDC token exchange.
+# AWS_ROLE_ARN secret must be set by ops after the OIDC role is deployed via Terraform.
+# Until the secret is registered, the "Configure AWS credentials" step will fail
+# and the workflow will exit before touching S3 or CloudFront.
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      S3_BUCKET_NAME: ${{ vars.S3_BUCKET_NAME }}
+      CLOUDFRONT_DISTRIBUTION_ID: ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}
+      # Relative path from repo root to the directory that becomes the S3 root.
+      # safespot-front/frontend/ contains admin.html, index.html, js/, etc.
+      DEPLOY_SOURCE: safespot-front/frontend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Fail fast if any required variable or secret is missing.
+      # secrets.* cannot be tested directly in `run`; we pass them as env vars instead.
+      - name: Validate required variables and secrets
+        env:
+          _AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+        run: |
+          test -n "$AWS_REGION"                || { echo "::error::vars.AWS_REGION is not set";                    exit 1; }
+          test -n "$S3_BUCKET_NAME"            || { echo "::error::vars.S3_BUCKET_NAME is not set";                exit 1; }
+          test -n "$CLOUDFRONT_DISTRIBUTION_ID"|| { echo "::error::vars.CLOUDFRONT_DISTRIBUTION_ID is not set";   exit 1; }
+          test -n "$_AWS_ROLE_ARN"             || { echo "::error::secrets.AWS_ROLE_ARN is not set (OIDC role not yet deployed)"; exit 1; }
+
+      # Confirm the deploy source directory and key files exist before uploading.
+      - name: Validate deploy source
+        run: |
+          test -d "$DEPLOY_SOURCE"              || { echo "::error::Deploy source directory not found: $DEPLOY_SOURCE"; exit 1; }
+          test -f "$DEPLOY_SOURCE/admin.html"   || { echo "::error::admin.html not found in $DEPLOY_SOURCE";            exit 1; }
+          test -f "$DEPLOY_SOURCE/index.html"   || { echo "::error::index.html not found in $DEPLOY_SOURCE";            exit 1; }
+          echo "Deploy source OK: $(find $DEPLOY_SOURCE -type f | wc -l) files"
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # All files use no-cache because filenames are not content-hashed.
+      # When JS/CSS filenames include content hashes, split into two steps:
+      #   1. HTML:   --exclude "*" --include "*.html" --cache-control "no-store,no-cache,must-revalidate"
+      #   2. Assets: --exclude "*.html"               --cache-control "public,max-age=31536000,immutable"
+      - name: Sync frontend files to S3
+        run: |
+          aws s3 sync "$DEPLOY_SOURCE/" "s3://$S3_BUCKET_NAME/" \
+            --delete \
+            --cache-control "max-age=0,no-cache,no-store,must-revalidate"
+
+      - name: Invalidate CloudFront cache
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id "$CLOUDFRONT_DISTRIBUTION_ID" \
+            --paths "/*"
+
+# ── IAM minimum permissions for ops ──────────────────────────────────────────
+#
+# Attach the following policy to the OIDC role (safespot-dev-frontend deploy):
+#
+# {
+#   "Version": "2012-10-17",
+#   "Statement": [
+#     {
+#       "Sid": "S3FrontendDeploy",
+#       "Effect": "Allow",
+#       "Action": ["s3:ListBucket"],
+#       "Resource": "arn:aws:s3:::safespot-dev-frontend"
+#     },
+#     {
+#       "Sid": "S3FrontendObjectDeploy",
+#       "Effect": "Allow",
+#       "Action": ["s3:PutObject", "s3:DeleteObject"],
+#       "Resource": "arn:aws:s3:::safespot-dev-frontend/*"
+#     },
+#     {
+#       "Sid": "CloudFrontInvalidation",
+#       "Effect": "Allow",
+#       "Action": ["cloudfront:CreateInvalidation"],
+#       "Resource": "arn:aws:cloudfront::154335823230:distribution/E2PBOVHQ83HLN1"
+#     }
+#   ]
+# }
+#
+# Trust policy — restrict to main branch pushes only:
+#
+# {
+#   "Version": "2012-10-17",
+#   "Statement": [{
+#     "Effect": "Allow",
+#     "Principal": {
+#       "Federated": "arn:aws:iam::154335823230:oidc-provider/token.actions.githubusercontent.com"
+#     },
+#     "Action": "sts:AssumeRoleWithWebIdentity",
+#     "Condition": {
+#       "StringEquals": {
+#         "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
+#       },
+#       "StringLike": {
+#         "token.actions.githubusercontent.com:sub":
+#           "repo:project-safespot/safespot-front:ref:refs/heads/main"
+#       }
+#     }
+#   }]
+# }

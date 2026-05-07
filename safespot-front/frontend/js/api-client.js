@@ -32,8 +32,10 @@ var SafeSpotApi = (function () {
       }
 
       if (res.status === 403) {
+        var ct = res.headers.get('content-type') || '';
         var e403 = new Error('FORBIDDEN');
         e403.status = 403;
+        e403.isHtmlError = ct.includes('text/html');
         throw e403;
       }
 

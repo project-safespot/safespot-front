@@ -156,7 +156,7 @@ tbody td{padding:11px 13px;font-size:15px;}
 
   <!-- 요약 카드 -->
   <div class="sum-grid">
-    <div class="sum-card bc-b"><div class="sum-label">전체 대피소</div><div class="sum-value cv-b">24</div><div class="sum-sub">강남구 관할 전체</div></div>
+    <div class="sum-card bc-b"><div class="sum-label">전체 대피소</div><div class="sum-value cv-b" id="cntTotal">24</div><div class="sum-sub">강남구 관할 전체</div></div>
     <div class="sum-card bc-g"><div class="sum-label">여유 대피소</div><div class="sum-value cv-g" id="cntG">-</div><div class="sum-sub">수용률 50% 미만</div></div>
     <div class="sum-card bc-y"><div class="sum-label">보통 대피소</div><div class="sum-value cv-y" id="cntY">-</div><div class="sum-sub">수용률 50~80%</div></div>
     <div class="sum-card bc-r"><div class="sum-label">혼잡 대피소</div><div class="sum-value cv-r" id="cntR">-</div><div class="sum-sub">수용률 80% 이상</div></div>
@@ -220,7 +220,7 @@ tbody td{padding:11px 13px;font-size:15px;}
     <!-- 검색/필터 -->
     <div class="resident-bar">
       <input type="text" id="resSrch" placeholder="성명, 대피소 검색..." style="width:220px;" oninput="renderResidents()">
-      <select id="resFilter" style="border:1px solid #ccc;padding:9px 12px;font-size:15px;font-family:inherit;outline:none;" onchange="renderResidents()">
+      <select id="resFilter" style="border:1px solid #ccc;padding:9px 12px;font-size:15px;font-family:inherit;outline:none;" onchange="onResFilterChange()">
         <option value="all">전체 시설</option>
         <option>역삼동 주민센터 대피소</option>
         <option>강남구민회관</option>
@@ -369,22 +369,28 @@ async function loadAdminDashboard(){
     var json=await SafeSpotApi.request({service:'core',path:'/admin/dashboard',auth:true});
     if(!json.success) throw new Error((json.error&&json.error.message)||'LOAD_FAILED');
     var data=json.data||{};
-    var s=data.summary||{openShelters:0,fullShelters:0,totalShelters:0};
+    var s=data.summary||{};
     var apiShelters=data.shelters||[];
-    document.getElementById('cntG').textContent=s.openShelters;
-    document.getElementById('cntR').textContent=s.fullShelters;
-    document.getElementById('cntY').textContent=s.totalShelters-s.openShelters-s.fullShelters;
-    var totOcc=apiShelters.reduce(function(a,x){return a+(x.currentOccupancy||0);},0);
+    var el=document.getElementById('cntTotal'); if(el) el.textContent=s.totalShelters??0;
+    document.getElementById('cntG').textContent=s.availableShelters??s.openShelters??0;
+    document.getElementById('cntR').textContent=s.crowdedShelters??s.fullShelters??0;
+    var yVal=s.normalShelters??((s.totalShelters??0)-(s.availableShelters??s.openShelters??0)-(s.crowdedShelters??s.fullShelters??0));
+    document.getElementById('cntY').textContent=yVal<0?0:yVal;
+    var totOcc=s.totalOccupants??apiShelters.reduce(function(a,x){return a+(x.currentOccupants??x.currentOccupancy??0);},0);
     document.getElementById('cntTot').textContent=totOcc.toLocaleString()+'명';
     backendShelters=apiShelters;
     shelters=backendShelters.map(mapAdminShelter);
     residents=[];
     updateResidentShelterOptions();
     renderAll();
-    await loadResidents();
+    document.getElementById('resBody').innerHTML='<tr><td colspan="12" style="text-align:center;padding:24px;color:#888;">대피소를 선택하면 입소자 목록이 표시됩니다.</td></tr>';
   }catch(e){
-    if(e.status===403) alert('관리자 권한이 필요합니다.');
-    else showAdminErrorState('관리자 대시보드 데이터를 불러올 수 없습니다.');
+    if(e.status===403){
+      if(e.isHtmlError) alert('CloudFront 또는 WAF에서 요청이 차단되었습니다. 잠시 후 다시 시도하거나 WAF RateLimit 설정을 확인하세요.');
+      else alert('관리자 권한이 필요합니다.');
+    } else {
+      showAdminErrorState('관리자 대시보드 데이터를 불러올 수 없습니다.');
+    }
   }
 }
 
@@ -392,14 +398,14 @@ function mapAdminShelter(s){
   var op=formatShelterStatus(s.shelterStatus);
   return {
     id:s.shelterId,
-    name:s.shelterName,
-    addr:s.address||'',
-    cap:s.capacityTotal||0,
-    cur:s.currentOccupancy||0,
-    type:s.shelterType||'',
+    name:s.name??s.shelterName??'',
+    addr:s.address??'',
+    cap:s.capacity??s.capacityTotal??0,
+    cur:s.currentOccupants??s.currentOccupancy??0,
+    type:s.shelterType??'',
     op:op,
-    mgr:s.managerName||'-',
-    tel:s.contact||'-'
+    mgr:s.manager??s.managerName??'-',
+    tel:s.contact??'-'
   };
 }
 
@@ -418,7 +424,7 @@ async function apiPatchShelter(shelterId,capacityTotal,reason){
 // EvacuationEntryItem → 로컬 resident 포맷 변환
 // fields: entryId, visitorName, visitorPhone, entryStatus, enteredAt, note
 //         detail.{ address, familyInfo, healthStatus, specialProtectionFlag }
-function mapResident(item,shelterName){
+function mapResident(item,shelterName,shelterId){
   var d=item.detail||{};
   return {
     id:item.entryId,
@@ -430,28 +436,44 @@ function mapResident(item,shelterName){
     health:d.healthStatus||'이상 없음',
     special:d.specialProtectionFlag?'Y':'N',
     shelter:shelterName,
+    shelterId:shelterId||null,
     room:'',
     time:item.enteredAt?(item.enteredAt.slice(0,16).replace('T',' ')):'',
     status:formatEntryStatus(item.entryStatus)
   };
 }
 
-async function loadResidents(){
+async function loadShelterResidents(shelterId){
+  var s=shelters.find(function(x){return x.id===shelterId;});
+  if(!s) return;
   document.getElementById('resBody').innerHTML='<tr><td colspan="12" style="text-align:center;padding:24px;color:#888;">입소자 데이터를 불러오는 중입니다.</td></tr>';
   try{
-    var results=await Promise.all(shelters.map(function(s){
-      return SafeSpotApi.request({service:'core',path:'/admin/evacuation-entries?shelterId='+s.id,auth:true})
-        .then(function(json){
-          if(!json.success) return [];
-          return ((json.data&&json.data.items)||[]).map(function(item){return mapResident(item,s.name);});
-        })
-        .catch(function(){return [];});
-    }));
-    residents=[].concat.apply([],results);
+    var json=await SafeSpotApi.request({service:'core',path:'/admin/evacuation-entries?shelterId='+shelterId,auth:true});
+    if(!json.success) throw new Error('LOAD_FAILED');
+    residents=((json.data&&json.data.items)||[]).map(function(item){return mapResident(item,s.name,s.id);});
     renderResidents();
     updateSum();
   }catch(e){
+    if(e.status===403){
+      if(e.isHtmlError) alert('CloudFront 또는 WAF에서 요청이 차단되었습니다. 잠시 후 다시 시도하거나 WAF RateLimit 설정을 확인하세요.');
+      else alert('관리자 권한이 필요합니다.');
+    }
     document.getElementById('resBody').innerHTML='<tr><td colspan="12" style="text-align:center;padding:24px;color:#c00;">입소자 데이터를 불러올 수 없습니다.</td></tr>';
+  }
+}
+
+function onResFilterChange(){
+  if(window.SafeSpotConfig && window.SafeSpotConfig.isRealMode()){
+    var sf=document.getElementById('resFilter').value;
+    if(sf==='all'){
+      residents=[];
+      document.getElementById('resBody').innerHTML='<tr><td colspan="12" style="text-align:center;padding:24px;color:#888;">대피소를 선택하면 입소자 목록이 표시됩니다.</td></tr>';
+      return;
+    }
+    var shelterId=Number(sf);
+    if(shelterId) loadShelterResidents(shelterId);
+  } else {
+    renderResidents();
   }
 }
 function initDash(name){
@@ -460,6 +482,7 @@ function initDash(name){
     showAdminLoadingState();
     return;
   }
+  updateResidentShelterOptions();
   renderAll();
   // [더미] 현재인원 랜덤 변동 시뮬레이션 — 백엔드 연결 시 제거 (실시간 폴링 또는 WebSocket으로 대체)
   setInterval(()=>{ shelters.forEach(s=>{const d=Math.floor(Math.random()*7)-3;s.cur=Math.max(0,Math.min(s.cap,s.cur+d));}); renderAll(); upd(); },5000);
@@ -476,7 +499,7 @@ function showAdminLoadingState(){
   });
   document.getElementById('monBody').innerHTML='<tr><td colspan="11" style="text-align:center;padding:24px;color:#888;">관리자 대시보드 데이터를 불러오는 중입니다.</td></tr>';
   document.getElementById('manBody').innerHTML='<tr><td colspan="11" style="text-align:center;padding:24px;color:#888;">관리자 대시보드 데이터를 불러오는 중입니다.</td></tr>';
-  document.getElementById('resBody').innerHTML='<tr><td colspan="12" style="text-align:center;padding:24px;color:#888;">입소자 데이터 API 연결 전입니다.</td></tr>';
+  document.getElementById('resBody').innerHTML='<tr><td colspan="12" style="text-align:center;padding:24px;color:#888;">대피소를 선택하면 입소자 목록이 표시됩니다.</td></tr>';
   var bulk=document.querySelector('.bulk-template');
   if(bulk) bulk.textContent='real 모드에서는 샘플 개인정보를 표시하지 않습니다.';
   var bulkInput=document.getElementById('bulkInput');
@@ -498,11 +521,12 @@ function showAdminLoadingState(){
 }
 
 function updateResidentShelterOptions(){
-  var options=shelters.map(function(s){return '<option>'+s.name+'</option>';}).join('');
   var resFilter=document.getElementById('resFilter');
-  if(resFilter) resFilter.innerHTML='<option value="all">전체 시설</option>'+options;
+  if(resFilter) resFilter.innerHTML='<option value="all">전체 시설</option>'+shelters.map(function(s){return '<option value="'+s.id+'">'+s.name+'</option>';}).join('');
   var rShelter=document.getElementById('rShelter');
-  if(rShelter) rShelter.innerHTML=options||'<option value="">대피소 데이터 없음</option>';
+  if(rShelter) rShelter.innerHTML=shelters.length
+    ?shelters.map(function(s){return '<option value="'+s.id+'">'+s.name+'</option>';}).join('')
+    :'<option value="">대피소 데이터 없음</option>';
 }
 
 function showAdminErrorState(message){
@@ -624,7 +648,7 @@ function renderResidents(){
   const sp=document.getElementById('resSpecial')?.value||'all';
   let list=residents;
   if(q) list=list.filter(r=>r.nm.includes(q)||r.shelter.includes(q));
-  if(sf!=='all') list=list.filter(r=>r.shelter===sf);
+  if(sf!=='all'){var sfId=Number(sf);list=list.filter(r=>sfId?(r.shelterId===sfId):(r.shelter===(shelters.find(x=>String(x.id)===sf)?.name||sf)));}
   if(sp==='Y') list=list.filter(r=>r.special==='Y');
   document.getElementById('resBody').innerHTML=list.map(r=>`
     <tr>
@@ -648,9 +672,11 @@ function renderResidents(){
 
 /* 입소자 모달 */
 let editResId=null;
-function openResidentModal(id){
-  editResId=id;
-  const r=id?residents.find(x=>x.id===id):null;
+// resId: 수정할 입소자 ID (null = 신규 등록)
+// lockShelterId: 특정 대피소 행에서 열 때 해당 shelterId (null = 사용자가 직접 선택)
+function openResidentModal(resId,lockShelterId){
+  editResId=resId??null;
+  const r=resId?residents.find(x=>x.id===resId):null;
   document.getElementById('resModalTitle').textContent=r?'입소자 정보 수정':'입소자 정보 입력';
   document.getElementById('rNm').value=r?.nm||'';
   document.getElementById('rRrn').value=r?.rrn||'';
@@ -659,7 +685,21 @@ function openResidentModal(id){
   document.getElementById('rFamily').value=r?.family||'';
   document.getElementById('rHealth').value=r?.health||'';
   document.getElementById('rSpecial').value=r?.special||'N';
-  document.getElementById('rShelter').value=r?.shelter||shelters[0].name;
+  const shelterEl=document.getElementById('rShelter');
+  if(r){
+    // 수정 모드: 기존 shelterId 우선, 없으면 이름으로 fallback
+    var editSid=r.shelterId||(shelters.find(function(x){return x.name===r.shelter;})?.id)||null;
+    shelterEl.value=editSid?String(editSid):'';
+    shelterEl.disabled=false;
+  }else if(lockShelterId!=null){
+    // 특정 대피소 행에서 신규 등록 → shelterId 고정
+    shelterEl.value=String(lockShelterId);
+    shelterEl.disabled=true;
+  }else{
+    // 개별 추가 버튼 → 사용자가 직접 선택
+    shelterEl.value=shelters[0]?.id?String(shelters[0].id):'';
+    shelterEl.disabled=false;
+  }
   document.getElementById('rRoom').value=r?.room||'';
   document.getElementById('rNote').value='';
   document.getElementById('resModal').classList.add('open');
@@ -667,14 +707,15 @@ function openResidentModal(id){
 async function saveResident(){
   const nm=document.getElementById('rNm').value.trim();
   if(!nm){alert('성명을 입력하세요.');return;}
-  const shelterName=document.getElementById('rShelter').value;
-  const data={nm,rrn:document.getElementById('rRrn').value,tel:document.getElementById('rTel').value,addr:document.getElementById('rAddr').value,family:document.getElementById('rFamily').value,health:document.getElementById('rHealth').value||'이상 없음',special:document.getElementById('rSpecial').value.startsWith('Y')?'Y':'N',shelter:shelterName,room:document.getElementById('rRoom').value,time:new Date().toLocaleString('ko-KR').replace(/\./g,'-').replace(/ /g,' ').slice(0,16)};
+  const selectedShelterId=Number(document.getElementById('rShelter').value||0);
+  if(!selectedShelterId){alert('입소 시설을 선택하세요.');return;}
+  const selectedShelter=shelters.find(function(x){return x.id===selectedShelterId;});
+  const shelterName=selectedShelter?.name||'';
+  const data={nm,rrn:document.getElementById('rRrn').value,tel:document.getElementById('rTel').value,addr:document.getElementById('rAddr').value,family:document.getElementById('rFamily').value,health:document.getElementById('rHealth').value||'이상 없음',special:document.getElementById('rSpecial').value.startsWith('Y')?'Y':'N',shelter:shelterName,shelterId:selectedShelterId,room:document.getElementById('rRoom').value,time:new Date().toLocaleString('ko-KR').replace(/\./g,'-').replace(/ /g,' ').slice(0,16)};
   if(window.SAFESPOT_CONFIG.apiMode==='real'&&!editResId){
-    var found=backendShelters.find(function(x){return x.shelterName===shelterName;});
-    if(!found){alert('대피소 서버 ID를 확인할 수 없습니다. 페이지를 새로고침 후 시도하세요.');return;}
     var tel=document.getElementById('rTel').value.replace(/-/g,'');
     var body={
-      shelterId:found.shelterId,
+      shelterId:selectedShelterId,
       name:nm,
       phoneNumber:tel||null,
       address:document.getElementById('rAddr').value,
@@ -689,8 +730,12 @@ async function saveResident(){
       alert('저장되었습니다.');
       await loadAdminDashboard();
     }catch(e){
-      if(e.status===403) alert('관리자 권한이 필요합니다.');
-      else alert('저장에 실패했습니다: '+e.message);
+      if(e.status===403){
+        if(e.isHtmlError) alert('CloudFront 또는 WAF에서 요청이 차단되었습니다. 잠시 후 다시 시도하거나 WAF RateLimit 설정을 확인하세요.');
+        else alert('관리자 권한이 필요합니다.');
+      } else {
+        alert('저장에 실패했습니다: '+e.message);
+      }
     }
     return;
   }
@@ -710,7 +755,7 @@ function parseBulk(){
   lines.forEach(line=>{
     const cols=line.split(/[,\t]/);
     if(cols.length<3)return;
-    residents.push({id:resIdSeq++,nm:cols[0]?.trim()||'',rrn:cols[1]?.trim()||'',tel:cols[2]?.trim()||'',addr:cols[3]?.trim()||'',family:cols[4]?.trim()||'',health:cols[5]?.trim()||'이상 없음',special:cols[6]?.trim()==='해당없음'||cols[6]?.trim()===''?'N':'Y',shelter:cols[7]?.trim()||shelters[0].name,room:cols[8]?.trim()||'',time:new Date().toLocaleString('ko-KR').slice(0,16)});
+    residents.push({id:resIdSeq++,nm:cols[0]?.trim()||'',rrn:cols[1]?.trim()||'',tel:cols[2]?.trim()||'',addr:cols[3]?.trim()||'',family:cols[4]?.trim()||'',health:cols[5]?.trim()||'이상 없음',special:cols[6]?.trim()==='해당없음'||cols[6]?.trim()===''?'N':'Y',shelter:cols[7]?.trim()||shelters[0]?.name||'',room:cols[8]?.trim()||'',time:new Date().toLocaleString('ko-KR').slice(0,16)});
     added++;
   });
   document.getElementById('bulkInput').value='';
@@ -734,7 +779,7 @@ function openEdit(id){
   editId=id; editShelterBackendId=null;
   const s=shelters.find(x=>x.id===id);
   if(window.SAFESPOT_CONFIG.apiMode==='real'){
-    var found=backendShelters.find(function(x){return x.shelterName===s.name;});
+    var found=backendShelters.find(function(x){return (x.name??x.shelterName)===s.name;});
     editShelterBackendId=found?found.shelterId:null;
   }
   document.getElementById('eNm').value=s.name;document.getElementById('eAddr').value=s.addr;document.getElementById('eCap').value=s.cap;document.getElementById('eType').value=s.type;document.getElementById('eOp').value=s.op;document.getElementById('eMgr').value=s.mgr;document.getElementById('eTel').value=s.tel;document.getElementById('eReason').value='';document.getElementById('eNote').value='';
@@ -752,8 +797,12 @@ async function saveEdit(){
       s.name=document.getElementById('eNm').value;s.addr=document.getElementById('eAddr').value;s.cap=newCap;s.type=document.getElementById('eType').value;s.op=document.getElementById('eOp').value;s.mgr=document.getElementById('eMgr').value;s.tel=document.getElementById('eTel').value;
       document.getElementById('editModal').classList.remove('open');renderAll();alert('저장되었습니다.');
     }catch(e){
-      if(e.status===403) alert('관리자 권한이 필요합니다.');
-      else alert('저장에 실패했습니다: '+e.message);
+      if(e.status===403){
+        if(e.isHtmlError) alert('CloudFront 또는 WAF에서 요청이 차단되었습니다. 잠시 후 다시 시도하거나 WAF RateLimit 설정을 확인하세요.');
+        else alert('관리자 권한이 필요합니다.');
+      } else {
+        alert('저장에 실패했습니다: '+e.message);
+      }
     }
     return;
   }
