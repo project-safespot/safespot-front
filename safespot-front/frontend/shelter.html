@@ -287,14 +287,14 @@
     <div class="shelter-side-head">
       <h2>내 주변 대피소</h2>
       <div class="filter-row">
-        <select id="regionSel">
-          <option value="">-- 시/도 선택 --</option>
-          <option>서울특별시</option><option>경기도</option><option>부산광역시</option>
-          <option>인천광역시</option><option>대구광역시</option><option>대전광역시</option>
+        <select id="regionSel" onchange="filterShelters()">
+          <option value="SEOUL">?????</option>
         </select>
-        <select id="typeSel">
-          <option value="">-- 유형 선택 --</option>
-          <option>임시대피소</option><option>지정대피소</option><option>광역대피소</option>
+        <select id="typeSel" onchange="filterShelters()">
+          <option value="">?? ??? ??</option>
+          <option value="DESIGNATED">?????</option>
+          <option value="TEMPORARY">?????</option>
+          <option value="WIDE">?????</option>
         </select>
       </div>
       <!-- 재난유형 필터 -->
@@ -326,6 +326,7 @@
     <div class="map-box-head">위치 지도 <span style="font-size:13px;font-weight:400;color:#888;">실시간 수용현황 반영</span></div>
     <div class="map-area">
     <div id="map"></div>
+    <div id="mapNotice" style="display:none;position:absolute;top:12px;right:12px;max-width:260px;background:#fff8e6;border:1px solid #f0c060;color:#7a5c00;font-size:12px;padding:8px 10px;border-radius:4px;z-index:999;box-shadow:0 2px 8px rgba(0,0,0,.12);"></div>
     <div class="map-legend">
       <h4>범례</h4>
       <div class="legend-row"><span class="legend-dot dot-open"></span>운영중</div>
@@ -406,69 +407,218 @@
 // Backend fields: shelterId, shelterName, shelterType, disasterType, address, latitude, longitude,
 //   distanceM, capacityTotal, currentOccupancy, availableCapacity, congestionLevel, shelterStatus, updatedAt
 // Note: contact and facility are NOT included in the nearby response — use mapShelterDetail for those.
-function mapShelterNearby(s) {
-  return {
-    id:           s.shelterId,
-    name:         s.shelterName,
-    addr:         s.address,
-    type:         s.shelterType,
-    disasterType: s.disasterType,
-    cap:          s.capacityTotal,
-    cur:          s.currentOccupancy,
-    lat:          s.latitude,
-    lng:          s.longitude,
-    tel:          '',
-    facility:     '',
-    status:       (s.shelterStatus === 'OPERATING' || s.shelterStatus === 'OPEN') ? 'open' :
-                  s.shelterStatus === 'STOPPED' ? 'stopped' :
-                  s.shelterStatus === 'FULL' ? 'full' : 'ready'
-  };
+const SEOUL_CITY_HALL = { lat: 37.5665, lng: 126.9780 };
+const DEFAULT_NEARBY_RADIUS = 5000;
+const DEFAULT_NEARBY_LIMIT = 50;
+const MARKER_IDLE_DEBOUNCE_MS = 400;
+const MAX_TILE_COUNT = 64;
+const TILE_Z_MIN = 11;
+const TILE_Z_MAX = 16;
+
+function numberOrNull(value) {
+  if (value === null || value === undefined || value === '') return null;
+  var num = Number(value);
+  return Number.isFinite(num) ? num : null;
 }
 
-// ShelterDetailDto DTO → UI shelter object (detail panel)
-// Backend fields: shelterId, shelterName, shelterType, disasterType, address, latitude, longitude,
-//   capacityTotal, currentOccupancy, availableCapacity, congestionLevel, shelterStatus,
-//   manager, contact, note, updatedAt
-function mapShelterDetail(s) {
-  return {
-    id:           s.shelterId,
-    name:         s.shelterName,
-    addr:         s.address,
-    type:         s.shelterType,
-    disasterType: s.disasterType,
-    cap:          s.capacityTotal,
-    cur:          s.currentOccupancy,
-    lat:          s.latitude,
-    lng:          s.longitude,
-    tel:          s.contact || '',
-    facility:     s.note || '',
-    status:       (s.shelterStatus === 'OPERATING' || s.shelterStatus === 'OPEN') ? 'open' :
-                  s.shelterStatus === 'STOPPED' ? 'stopped' :
-                  s.shelterStatus === 'FULL' ? 'full' : 'ready'
-  };
+function mapMockStatus(status) {
+  if (status === 'open') return 'OPERATING';
+  if (status === 'full') return 'FULL';
+  if (status === 'stopped') return 'STOPPED';
+  if (status === 'ready') return 'PREPARING';
+  return 'UNKNOWN';
 }
 
-async function loadShelters(lat, lng, radius, disasterType) {
-  // API accepts radius 100–5000 only
-  var qs = 'lat=' + lat + '&lng=' + lng + '&radius=' + (radius || 5000);
-  if(disasterType) qs += '&disasterType=' + encodeURIComponent(disasterType);
-  // Clear mock data immediately — real mode must not serve mock content on API failure
-  SHELTERS = [];
-  filteredShelters = [];
-  try {
-    var json = await SafeSpotApi.request({ service: 'public', path: '/shelters/nearby?' + qs, method: 'GET' });
-    if(!json.success) throw new Error((json.error && json.error.message) || 'SERVER_ERROR');
-    SHELTERS = ((json.data && json.data.items) || []).map(mapShelterNearby);
-    filteredShelters = SHELTERS.slice();
-    renderList();
-    renderMarkers();
-  } catch(e) {
-    document.getElementById('shelterList').innerHTML =
-      '<div style="padding:20px;color:#c00;font-size:14px;">대피소 정보를 불러올 수 없습니다.<br>' +
-      '<span style="font-size:12px;color:#888;">잠시 후 다시 시도해 주세요.</span></div>';
-    document.getElementById('shelterCount').innerHTML = '<strong>0개</strong> 대피소 표시 중';
-    renderMarkers();
+function inferCongestionLevel(cur, cap, shelterStatus) {
+  if (String(shelterStatus || '').toUpperCase() === 'FULL') return 'FULL';
+  if (!Number.isFinite(cur) || !Number.isFinite(cap) || cap <= 0) return 'UNKNOWN';
+  var pct = cur / cap;
+  if (pct >= 1) return 'FULL';
+  if (pct >= 0.8) return 'HIGH';
+  if (pct >= 0.4) return 'MEDIUM';
+  return 'LOW';
+}
+
+function normalizeShelterItem(source) {
+  source = source || {};
+
+  var cap = numberOrNull(source.capacityTotal);
+  if (cap === null) cap = numberOrNull(source.cap);
+  if (cap === null) cap = 0;
+
+  var cur = numberOrNull(source.currentOccupancy);
+  if (cur === null) cur = numberOrNull(source.cur);
+  if (cur === null) cur = 0;
+
+  var available = numberOrNull(source.availableCapacity);
+  if (available === null && Number.isFinite(cap) && Number.isFinite(cur)) {
+    available = Math.max(cap - cur, 0);
   }
+
+  var shelterStatus = source.shelterStatus || mapMockStatus(source.status);
+  var congestionLevel = source.congestionLevel || inferCongestionLevel(cur, cap, shelterStatus);
+
+  return {
+    id: source.shelterId != null ? source.shelterId : source.id,
+    name: source.shelterName || source.name || '',
+    addr: source.address || source.addr || '',
+    type: source.shelterType || source.type || '',
+    disasterType: source.disasterType || '',
+    cap: cap,
+    cur: cur,
+    available: available,
+    congestionLevel: congestionLevel || 'UNKNOWN',
+    shelterStatus: shelterStatus || 'UNKNOWN',
+    status: normalizeUiStatus({ shelterStatus: shelterStatus, congestionLevel: congestionLevel }),
+    lat: numberOrNull(source.latitude != null ? source.latitude : source.lat),
+    lng: numberOrNull(source.longitude != null ? source.longitude : source.lng),
+    distanceM: numberOrNull(source.distanceM),
+    tel: source.contact || source.tel || '',
+    facility: source.note || source.facility || '',
+    updatedAt: source.updatedAt || ''
+  };
+}
+
+function extractMapTileItems(data) {
+  data = data || {};
+  if (Array.isArray(data.items)) return data.items;
+  if (Array.isArray(data.markers)) return data.markers;
+  if (Array.isArray(data.tiles)) {
+    return data.tiles.reduce(function(all, tile) {
+      if (tile && Array.isArray(tile.items)) return all.concat(tile.items);
+      return all;
+    }, []);
+  }
+  return [];
+}
+
+function dedupeShelters(items) {
+  var seen = {};
+  return (items || []).filter(function(item) {
+    var id = item && item.id;
+    if (id === null || id === undefined || seen[id]) return false;
+    seen[id] = true;
+    return true;
+  });
+}
+
+function buildQuery(params) {
+  return Object.keys(params).filter(function(key) {
+    var value = params[key];
+    return value !== null && value !== undefined && value !== '';
+  }).map(function(key) {
+    return encodeURIComponent(key) + '=' + encodeURIComponent(params[key]);
+  }).join('&');
+}
+
+function getSelectedDisasterType() {
+  return document.getElementById('disasterSel').value || '';
+}
+
+function getSelectedShelterType() {
+  return document.getElementById('typeSel').value || '';
+}
+
+function getListCenter() {
+  if (userLat !== null && userLng !== null) return { lat: userLat, lng: userLng };
+  if (map) {
+    var center = map.getCenter();
+    return { lat: center.getLat(), lng: center.getLng() };
+  }
+  return { lat: SEOUL_CITY_HALL.lat, lng: SEOUL_CITY_HALL.lng };
+}
+
+function normalizeShelterTypeCode(type) {
+  if (type === 'DESIGNATED' || type === '?????') return 'DESIGNATED';
+  if (type === 'TEMPORARY' || type === '?????') return 'TEMPORARY';
+  if (type === 'WIDE' || type === '?????') return 'WIDE';
+  return type || '';
+}
+
+function getPrimaryStatusText(item) {
+  var uiStatus = normalizeUiStatus(item);
+  var shelterStatus = String(item.shelterStatus || '').toUpperCase();
+  var congestionLevel = String(item.congestionLevel || '').toUpperCase();
+
+  if (uiStatus === 'full') return formatShelterStatus('FULL');
+  if (uiStatus === 'stopped') return formatShelterStatus('STOPPED');
+  if (congestionLevel === 'HIGH' || congestionLevel === 'BUSY') return formatCongestionLevel('HIGH');
+  if (shelterStatus === 'AVAILABLE') return formatShelterStatus('AVAILABLE');
+  if (shelterStatus === 'OPERATING' || shelterStatus === 'OPEN') return formatShelterStatus('OPERATING');
+  if (shelterStatus === 'PREPARING') return formatShelterStatus('PREPARING');
+  if (shelterStatus === 'UNKNOWN' && congestionLevel && congestionLevel !== 'UNKNOWN') return formatCongestionLevel(congestionLevel);
+  return formatShelterStatus(shelterStatus || 'UNKNOWN');
+}
+
+function statusBadge(status) {
+  if (status === 'open') return 'badge-open';
+  if (status === 'full' || status === 'stopped') return 'badge-full';
+  return 'badge-ready';
+}
+
+function mkClass(status) {
+  if (status === 'open') return 'mk-open';
+  if (status === 'full' || status === 'stopped') return 'mk-full';
+  return 'mk-ready';
+}
+
+function capPercent(cur, cap) {
+  if (!Number.isFinite(cur) || !Number.isFinite(cap) || cap <= 0) return 0;
+  return Math.min(Math.round(cur / cap * 100), 100);
+}
+
+function capFillClass(pct) {
+  return pct >= 100 ? 'over' : pct >= 80 ? 'warn' : '';
+}
+
+function disasterBadgeClass(d) {
+  if (d === 'EARTHQUAKE') return 'badge-earthquake';
+  if (d === 'FLOOD') return 'badge-flood';
+  if (d === 'LANDSLIDE') return 'badge-landslide';
+  return 'badge-all';
+}
+
+function formatDistance(distanceM, shelter) {
+  if (Number.isFinite(distanceM)) {
+    if (distanceM < 1000) return Math.round(distanceM) + 'm';
+    return (distanceM / 1000).toFixed(1) + 'km';
+  }
+
+  if (userLat !== null && userLng !== null && Number.isFinite(shelter.lat) && Number.isFinite(shelter.lng)) {
+    return haversine(userLat, userLng, shelter.lat, shelter.lng).toFixed(1) + 'km';
+  }
+
+  return '';
+}
+
+function escapeHtml(value) {
+  return String(value == null ? '' : value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function setListMessage(message, isError) {
+  var el = document.getElementById('shelterList');
+  var countEl = document.getElementById('shelterCount');
+  if (countEl) countEl.innerHTML = '<strong>0?</strong> ??? ?? ?';
+  if (el) {
+    el.innerHTML = '<div style="padding:20px;color:' + (isError ? '#c00' : '#888') + ';font-size:14px;">' + escapeHtml(message) + '</div>';
+  }
+}
+
+function setMapNotice(message) {
+  var el = document.getElementById('mapNotice');
+  if (!el) return;
+  if (!message) {
+    el.style.display = 'none';
+    el.textContent = '';
+    return;
+  }
+  el.textContent = message;
+  el.style.display = 'block';
 }
 
 const MOCK_SHELTERS = [
@@ -498,260 +648,456 @@ const MOCK_SHELTERS = [
   {id:24,name:'중랑구 용마폭포공원 대피소',     addr:'서울 중랑구 망우로 210',            type:'임시대피소', disasterType:'LANDSLIDE',  cap:600,  cur:280,  lat:37.5980, lng:127.0930, tel:'02-2094-2114',   facility:'화장실, 급수', status:'open'},
 ];
 
-let SHELTERS = (window.SafeSpotConfig && window.SafeSpotConfig.isMockMode()) ? MOCK_SHELTERS.slice() : [];
-
-let filteredShelters = SHELTERS.slice();
+let nearbyShelters = (window.SafeSpotConfig && window.SafeSpotConfig.isMockMode()) ? MOCK_SHELTERS.map(normalizeShelterItem) : [];
+let mapTileShelters = (window.SafeSpotConfig && window.SafeSpotConfig.isMockMode()) ? MOCK_SHELTERS.map(normalizeShelterItem) : [];
+let listFilteredShelters = nearbyShelters.slice();
 let map, markers = [], selectedId = null;
 let userLat = null, userLng = null, userMarker = null, userCircle = null;
+let mapIdleTimer = null;
+let nearbyRequestSeq = 0;
+let mapTileRequestSeq = 0;
 
-if(window.SafeSpotConfig && window.SafeSpotConfig.isRealMode()) {
-  var realStrip=document.getElementById('emgStrip');
-  if(realStrip) realStrip.style.display='none';
-  var initialList=document.getElementById('shelterList');
-  if(initialList) initialList.innerHTML='<div style="padding:20px;color:#888;font-size:14px;">대피소 정보를 불러오는 중입니다.</div>';
-  var initialCount=document.getElementById('shelterCount');
-  if(initialCount) initialCount.innerHTML='<strong>0개</strong> 대피소 표시 중';
+function configureShelterFilters() {
+  var regionSel = document.getElementById('regionSel');
+  if (regionSel) regionSel.innerHTML = '<option value="SEOUL">?????</option>';
+
+  var typeSel = document.getElementById('typeSel');
+  if (typeSel) {
+    typeSel.innerHTML = '' +
+      '<option value="">?? ??? ??</option>' +
+      '<option value="DESIGNATED">?????</option>' +
+      '<option value="TEMPORARY">?????</option>' +
+      '<option value="WIDE">?????</option>';
+  }
 }
 
-function statusLabel(s){
-  if(s === 'open')    return '운영중';
-  if(s === 'stopped') return '운영중단';
-  if(s === 'full')    return '수용초과';
-  return '준비중';
-}
-function statusBadge(s){ return s === 'open' ? 'badge-open' : (s === 'full' || s === 'stopped') ? 'badge-full' : 'badge-ready'; }
-function mkClass(s){ return s === 'open' ? 'mk-open' : (s === 'full' || s === 'stopped') ? 'mk-full' : 'mk-ready'; }
-function capPercent(cur, cap){ return Math.min(Math.round(cur / cap * 100), 100); }
-function capFillClass(pct){ return pct >= 100 ? 'over' : pct >= 80 ? 'warn' : ''; }
-
-function disasterLabel(d){ return formatDisasterType(d) || ''; }
-function disasterBadgeClass(d){
-  if(d === 'EARTHQUAKE') return 'badge-earthquake';
-  if(d === 'FLOOD')      return 'badge-flood';
-  if(d === 'LANDSLIDE')  return 'badge-landslide';
-  return 'badge-all';
+function isRealMode() {
+  return window.SafeSpotConfig && window.SafeSpotConfig.isRealMode();
 }
 
-function renderList(){
-  const el = document.getElementById('shelterList');
-  document.getElementById('shelterCount').innerHTML = `<strong>${filteredShelters.length}개</strong> 대피소 표시 중`;
+function applyListFilters(items) {
+  var keyword = document.getElementById('kwInput').value.trim();
+  var shelterType = getSelectedShelterType();
 
-  el.innerHTML = filteredShelters.map(s => {
-    const pct = capPercent(s.cur, s.cap);
-    const dist = userLat !== null ? haversine(userLat, userLng, s.lat, s.lng) : null;
-    const distBadge = dist !== null ? `<span class="shelter-dist">${dist.toFixed(1)}km</span>` : '';
-    // [더미] s.disasterType — 실제 API 연결 시 서버 응답의 disasterType 필드 그대로 사용
-    const dBadge = s.disasterType
-      ? `<span class="disaster-badge ${disasterBadgeClass(s.disasterType)}">${disasterLabel(s.disasterType)}</span>`
-      : '';
-
-    return `
-      <div class="shelter-item${selectedId === s.id ? ' active' : ''}" onclick="selectShelter(${s.id})">
-        <div class="shelter-item-top">
-          <span class="shelter-name">${s.name}</span>
-          <span class="shelter-badge ${statusBadge(s.status)}">${statusLabel(s.status)}</span>
-          ${dBadge}
-          ${distBadge}
-        </div>
-        <div class="shelter-addr">${s.addr}</div>
-        <div class="shelter-meta">
-          <span>${s.type}</span>
-          <span>
-            <span class="cap-bar"><span class="cap-fill ${capFillClass(pct)}" style="width:${pct}%"></span></span>
-            ${s.cur.toLocaleString()}/${s.cap.toLocaleString()}명
-          </span>
-        </div>
-      </div>
-    `;
-  }).join('');
-}
-
-function filterShelters(){
-  const region = document.getElementById('regionSel').value;
-  const type = document.getElementById('typeSel').value;
-  const kw = document.getElementById('kwInput').value.trim();
-  // [더미] 재난유형 클라이언트 필터 — 실제 API 연결 시 아래 disasterType 변수를
-  //        fetchShelters(lat, lng, radius, disasterType) 파라미터로 전달하고 이 필터 제거
-  const disasterType = document.getElementById('disasterSel').value;
-
-  filteredShelters = SHELTERS.filter(s => {
-    const regionKey = region.replace('특별시', '').replace('광역시', '').replace('도', '');
-    if(region && !s.addr.includes(regionKey)) return false;
-    if(type && s.type !== type) return false;
-    if(kw && !s.name.includes(kw) && !s.addr.includes(kw)) return false;
-    // [더미] 재난유형 필터 — 실제 API 연결 시 이 조건 제거 (서버에서 처리)
-    if(disasterType && s.disasterType !== disasterType) return false;
+  var filtered = (items || []).filter(function(item) {
+    if (shelterType && normalizeShelterTypeCode(item.type) !== shelterType) return false;
+    if (keyword && item.name.indexOf(keyword) === -1 && item.addr.indexOf(keyword) === -1) return false;
     return true;
   });
 
-  if(userLat !== null){
-    filteredShelters.sort((a, b) => haversine(userLat, userLng, a.lat, a.lng) - haversine(userLat, userLng, b.lat, b.lng));
+  if (userLat !== null && userLng !== null) {
+    filtered.sort(function(a, b) {
+      var aDist = Number.isFinite(a.distanceM) ? a.distanceM : haversine(userLat, userLng, a.lat, a.lng) * 1000;
+      var bDist = Number.isFinite(b.distanceM) ? b.distanceM : haversine(userLat, userLng, b.lat, b.lng) * 1000;
+      return aDist - bDist;
+    });
   }
 
-  renderList();
-  renderMarkers();
+  return filtered;
 }
 
-function hdrDoSearch(){
-  document.getElementById('kwInput').value = document.getElementById('hdrSrch').value;
-  filterShelters();
+function renderList() {
+  var el = document.getElementById('shelterList');
+  var countEl = document.getElementById('shelterCount');
+  var keyword = document.getElementById('kwInput').value.trim();
+
+  if (!el || !countEl) return;
+
+  countEl.innerHTML = '<strong>' + listFilteredShelters.length + '?</strong> ??? ?? ?' + (isRealMode() && keyword ? ' (?? nearby ?? ? ??)' : '');
+
+  if (!listFilteredShelters.length) {
+    el.innerHTML = '<div style="padding:20px;color:#888;font-size:14px;">' +
+      (keyword ? '?? nearby ?? ??? ?? ??? ???? ???? ????.' : '??? ???? ????.') +
+      '</div>';
+    return;
+  }
+
+  el.innerHTML = listFilteredShelters.map(function(shelter) {
+    var pct = capPercent(shelter.cur, shelter.cap);
+    var distanceText = formatDistance(shelter.distanceM, shelter);
+    var disasterBadge = shelter.disasterType
+      ? '<span class="disaster-badge ' + disasterBadgeClass(shelter.disasterType) + '">' + escapeHtml(formatDisasterType(shelter.disasterType)) + '</span>'
+      : '';
+
+    return '' +
+      '<div class="shelter-item' + (selectedId === shelter.id ? ' active' : '') + '" onclick="selectShelter(' + shelter.id + ')">' +
+        '<div class="shelter-item-top">' +
+          '<span class="shelter-name">' + escapeHtml(shelter.name) + '</span>' +
+          '<span class="shelter-badge ' + statusBadge(normalizeUiStatus(shelter)) + '">' + escapeHtml(getPrimaryStatusText(shelter)) + '</span>' +
+          disasterBadge +
+          (distanceText ? '<span class="shelter-dist">' + escapeHtml(distanceText) + '</span>' : '') +
+        '</div>' +
+        '<div class="shelter-addr">' + escapeHtml(shelter.addr) + '</div>' +
+        '<div class="shelter-meta">' +
+          '<span>' + escapeHtml(formatShelterType(shelter.type)) + '</span>' +
+          '<span><span class="cap-bar"><span class="cap-fill ' + capFillClass(pct) + '" style="width:' + pct + '%"></span></span>' +
+            shelter.cur.toLocaleString() + '/' + shelter.cap.toLocaleString() + '?</span>' +
+        '</div>' +
+      '</div>';
+  }).join('');
 }
 
-function showShelterDetail(s) {
-  document.getElementById('dpDetailWarn').style.display = 'none';
-  document.getElementById('dpName').textContent = s.name;
-  document.getElementById('dpAddr').textContent = s.addr;
-  document.getElementById('dpType').textContent = s.type;
+function findShelterById(id) {
+  var all = nearbyShelters.concat(mapTileShelters);
+  for (var i = 0; i < all.length; i += 1) {
+    if (String(all[i].id) === String(id)) return all[i];
+  }
+  return null;
+}
+
+function showShelterDetail(shelter, warnMessage) {
+  shelter = normalizeShelterItem(shelter);
+
+  var warnEl = document.getElementById('dpDetailWarn');
+  warnEl.style.display = warnMessage ? 'block' : 'none';
+  warnEl.textContent = warnMessage || '';
+
+  document.getElementById('dpName').textContent = shelter.name || '-';
+  document.getElementById('dpAddr').textContent = shelter.addr || '-';
+  document.getElementById('dpType').textContent = formatShelterType(shelter.type);
+
   var dpDisasterEl = document.getElementById('dpDisaster');
-  if(s.disasterType){
-    dpDisasterEl.innerHTML = '<span class="disaster-badge ' + disasterBadgeClass(s.disasterType) + '">' + disasterLabel(s.disasterType) + '</span>';
+  if (shelter.disasterType) {
+    dpDisasterEl.innerHTML = '<span class="disaster-badge ' + disasterBadgeClass(shelter.disasterType) + '">' + escapeHtml(formatDisasterType(shelter.disasterType)) + '</span>';
   } else {
-    dpDisasterEl.textContent = '정보 없음';
+    dpDisasterEl.textContent = '?? ??';
   }
-  document.getElementById('dpCap').textContent = s.cap.toLocaleString() + '명';
-  var pct = capPercent(s.cur, s.cap);
-  document.getElementById('dpCur').textContent = s.cur.toLocaleString() + '명 (' + pct + '%)';
-  document.getElementById('dpStatus').innerHTML = '<span class="shelter-badge ' + statusBadge(s.status) + '">' + statusLabel(s.status) + '</span>';
-  document.getElementById('dpTel').textContent = s.tel;
-  document.getElementById('dpFacility').textContent = s.facility;
+
+  document.getElementById('dpCap').textContent = shelter.cap.toLocaleString() + '?';
+  document.getElementById('dpCur').textContent = shelter.cur.toLocaleString() + '? (' + capPercent(shelter.cur, shelter.cap) + '%)';
+  document.getElementById('dpStatus').innerHTML = '<span class="shelter-badge ' + statusBadge(normalizeUiStatus(shelter)) + '">' + escapeHtml(getPrimaryStatusText(shelter)) + '</span>';
+  document.getElementById('dpTel').textContent = shelter.tel || '-';
+  document.getElementById('dpFacility').textContent = shelter.facility || '-';
   document.getElementById('detailPanel').classList.add('open');
-  map.setCenter(new kakao.maps.LatLng(s.lat, s.lng));
-  map.setLevel(3);
+
+  if (map && Number.isFinite(shelter.lat) && Number.isFinite(shelter.lng)) {
+    map.setCenter(new kakao.maps.LatLng(shelter.lat, shelter.lng));
+    map.setLevel(3);
+  }
 }
 
-async function selectShelter(id){
+async function selectShelter(id) {
   selectedId = id;
   renderList();
 
-  if(window.SAFESPOT_CONFIG.apiMode === 'real') {
+  if (isRealMode()) {
     try {
-      var json = await SafeSpotApi.request({ service: 'public', path: '/shelters/' + id, method: 'GET' });
-      if(!json.success) throw new Error((json.error && json.error.message) || 'SERVER_ERROR');
-      showShelterDetail(mapShelterDetail(json.data));
+      var json = await SafeSpotApi.request({ service: 'public', path: '/shelters/' + encodeURIComponent(id), method: 'GET' });
+      if (!json.success) throw new Error((json.error && json.error.message) || 'SERVER_ERROR');
+      showShelterDetail(normalizeShelterItem(json.data));
       return;
-    } catch(e) {
-      // Detail API failed: fall back to SHELTERS cache for UI continuity with visible warning
-      var cached = SHELTERS.find(function(x){ return x.id === id; });
-      if(!cached) {
-        document.getElementById('detailPanel').classList.add('open');
-        document.getElementById('dpDetailWarn').style.display = 'none';
-        document.getElementById('dpName').textContent = '상세 정보를 불러올 수 없습니다.';
-        ['dpAddr', 'dpType', 'dpCap', 'dpCur', 'dpTel', 'dpFacility'].forEach(function(f) {
-          document.getElementById(f).textContent = '-';
-        });
-        document.getElementById('dpDisaster').textContent = '-';
-        document.getElementById('dpStatus').textContent = '-';
+    } catch (error) {
+      var cached = findShelterById(id);
+      if (cached) {
+        showShelterDetail(cached, '?? ??? ?? ??? ???? ?? ??/?? ???? ?????.');
         return;
       }
-      var warnEl = document.getElementById('dpDetailWarn');
-      warnEl.textContent = '상세 정보를 최신 상태로 불러오지 못해 목록 데이터를 표시합니다.';
-      warnEl.style.display = 'block';
-      showShelterDetail(cached);
+
+      document.getElementById('detailPanel').classList.add('open');
+      document.getElementById('dpDetailWarn').style.display = 'none';
+      document.getElementById('dpName').textContent = '?? ??? ??? ? ????.';
+      ['dpAddr', 'dpType', 'dpCap', 'dpCur', 'dpTel', 'dpFacility'].forEach(function(fieldId) {
+        document.getElementById(fieldId).textContent = '-';
+      });
+      document.getElementById('dpDisaster').textContent = '-';
+      document.getElementById('dpStatus').textContent = '-';
       return;
     }
   }
 
-  var s = SHELTERS.find(function(x){ return x.id === id; });
-  if(!s) return;
-  showShelterDetail(s);
+  var selected = findShelterById(id);
+  if (selected) showShelterDetail(selected);
 }
 
-function closeDetail(){
+function closeDetail() {
   document.getElementById('dpDetailWarn').style.display = 'none';
   document.getElementById('detailPanel').classList.remove('open');
   selectedId = null;
   renderList();
 }
 
-function openNavi(){
-  const s = SHELTERS.find(x => x.id === selectedId);
-  if(!s){
-    alert('먼저 대피소를 선택하세요.');
+function openNavi() {
+  var shelter = findShelterById(selectedId);
+  if (!shelter) {
+    alert('?? ???? ??? ???.');
     return;
   }
 
-  const url = `https://map.kakao.com/link/to/${encodeURIComponent(s.name)},${s.lat},${s.lng}`;
+  var url = 'https://map.kakao.com/link/to/' + encodeURIComponent(shelter.name) + ',' + shelter.lat + ',' + shelter.lng;
   window.open(url, '_blank');
 }
 
-function renderMarkers(){
-  markers.forEach(m => m.setMap(null));
+function renderMarkers() {
+  markers.forEach(function(marker) { marker.setMap(null); });
   markers = [];
 
-  filteredShelters.forEach(s => {
-    const lat = Number(s.lat);
-    const lng = Number(s.lng);
-    if(!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+  if (!map) return;
 
-    const overlay = new kakao.maps.CustomOverlay({
-      content: `<div class="mk ${mkClass(s.status)}" onclick="selectShelter(${s.id})" style="cursor:pointer;">${s.cur >= s.cap ? '!' : ''}</div>`,
-      position: new kakao.maps.LatLng(lat, lng),
+  mapTileShelters.forEach(function(shelter) {
+    if (!Number.isFinite(shelter.lat) || !Number.isFinite(shelter.lng)) return;
+
+    var uiStatus = normalizeUiStatus(shelter);
+    var overlay = new kakao.maps.CustomOverlay({
+      content: '<div class="mk ' + mkClass(uiStatus) + '" onclick="selectShelter(' + shelter.id + ')" style="cursor:pointer;">' + (uiStatus === 'full' ? '!' : '') + '</div>',
+      position: new kakao.maps.LatLng(shelter.lat, shelter.lng),
       yAnchor: 0.5,
       xAnchor: 0.5
     });
 
     overlay.setMap(map);
-    overlay._sid = s.id;
     markers.push(overlay);
   });
 }
 
-function haversine(lat1, lng1, lat2, lng2){
-  const R = 6371;
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLng = (lng2 - lng1) * Math.PI / 180;
-  const a = Math.sin(dLat/2) ** 2 +
+function haversine(lat1, lng1, lat2, lng2) {
+  var R = 6371;
+  var dLat = (lat2 - lat1) * Math.PI / 180;
+  var dLng = (lng2 - lng1) * Math.PI / 180;
+  var a = Math.sin(dLat / 2) ** 2 +
     Math.cos(lat1 * Math.PI / 180) *
     Math.cos(lat2 * Math.PI / 180) *
-    Math.sin(dLng/2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-function searchByGPS(){
-  const btn = document.getElementById('gpsBtn');
-  btn.textContent = '📡 위치 확인 중...';
+function lonToTileX(lng, z) {
+  return Math.floor((lng + 180) / 360 * Math.pow(2, z));
+}
+
+function latToTileY(lat, z) {
+  var boundedLat = Math.max(-85.05112878, Math.min(85.05112878, lat));
+  var rad = boundedLat * Math.PI / 180;
+  return Math.floor((1 - Math.log(Math.tan(rad) + 1 / Math.cos(rad)) / Math.PI) / 2 * Math.pow(2, z));
+}
+
+function kakaoLevelToTileZ(level) {
+  if (level <= 3) return 16;
+  if (level === 4) return 15;
+  if (level === 5) return 14;
+  if (level === 6) return 13;
+  if (level === 7) return 12;
+  return 11;
+}
+
+function getVisibleTiles(currentMap) {
+  if (!currentMap) return { z: 11, tiles: [], tooManyTiles: false };
+
+  var bounds = currentMap.getBounds();
+  var sw = bounds.getSouthWest();
+  var ne = bounds.getNorthEast();
+  var z = Math.max(TILE_Z_MIN, Math.min(TILE_Z_MAX, kakaoLevelToTileZ(currentMap.getLevel())));
+  var maxIndex = Math.pow(2, z) - 1;
+
+  var minX = Math.max(0, Math.min(maxIndex, lonToTileX(sw.getLng(), z)));
+  var maxX = Math.max(0, Math.min(maxIndex, lonToTileX(ne.getLng(), z)));
+  var minY = Math.max(0, Math.min(maxIndex, latToTileY(ne.getLat(), z)));
+  var maxY = Math.max(0, Math.min(maxIndex, latToTileY(sw.getLat(), z)));
+  var center = currentMap.getCenter();
+  var centerX = lonToTileX(center.getLng(), z);
+  var centerY = latToTileY(center.getLat(), z);
+  var tiles = [];
+
+  for (var x = minX; x <= maxX; x += 1) {
+    for (var y = minY; y <= maxY; y += 1) {
+      tiles.push({
+        key: x + ':' + y,
+        distance: Math.abs(x - centerX) + Math.abs(y - centerY)
+      });
+    }
+  }
+
+  var tooManyTiles = tiles.length > MAX_TILE_COUNT;
+  if (tooManyTiles) {
+    tiles.sort(function(a, b) { return a.distance - b.distance; });
+    tiles = tiles.slice(0, MAX_TILE_COUNT);
+  }
+
+  return {
+    z: z,
+    tiles: tiles.map(function(tile) { return tile.key; }),
+    tooManyTiles: tooManyTiles
+  };
+}
+
+async function loadNearbyShelters() {
+  if (!isRealMode()) {
+    nearbyShelters = MOCK_SHELTERS.map(normalizeShelterItem).filter(function(item) {
+      var disasterType = getSelectedDisasterType();
+      var shelterType = getSelectedShelterType();
+      if (disasterType && item.disasterType !== disasterType) return false;
+      if (shelterType && normalizeShelterTypeCode(item.type) !== shelterType) return false;
+      return true;
+    });
+    listFilteredShelters = applyListFilters(nearbyShelters);
+    renderList();
+    return;
+  }
+
+  var center = getListCenter();
+  var requestSeq = ++nearbyRequestSeq;
+  var query = buildQuery({
+    lat: center.lat,
+    lng: center.lng,
+    radius: DEFAULT_NEARBY_RADIUS,
+    limit: DEFAULT_NEARBY_LIMIT,
+    disasterType: getSelectedDisasterType(),
+    shelterType: getSelectedShelterType()
+  });
+
+  setListMessage('??? ??? ???? ????.', false);
+
+  try {
+    var json = await SafeSpotApi.request({
+      service: 'public',
+      path: '/shelters/nearby?' + query,
+      method: 'GET'
+    });
+    if (requestSeq !== nearbyRequestSeq) return;
+    if (!json.success) throw new Error((json.error && json.error.message) || 'SERVER_ERROR');
+
+    nearbyShelters = ((json.data && json.data.items) || []).map(normalizeShelterItem);
+    listFilteredShelters = applyListFilters(nearbyShelters);
+    renderList();
+  } catch (error) {
+    if (requestSeq !== nearbyRequestSeq) return;
+    nearbyShelters = [];
+    listFilteredShelters = [];
+    setListMessage('??? ??? ??? ? ????.', true);
+  }
+}
+
+async function loadMapTileShelters() {
+  if (!map) return;
+
+  if (!isRealMode()) {
+    mapTileShelters = MOCK_SHELTERS.map(normalizeShelterItem).filter(function(item) {
+      var disasterType = getSelectedDisasterType();
+      var shelterType = getSelectedShelterType();
+      if (disasterType && item.disasterType !== disasterType) return false;
+      if (shelterType && normalizeShelterTypeCode(item.type) !== shelterType) return false;
+      return true;
+    });
+    mapTileShelters = applyListFilters(mapTileShelters);
+    setMapNotice('');
+    renderMarkers();
+    return;
+  }
+
+  var tileInfo = getVisibleTiles(map);
+  if (!tileInfo.tiles.length) {
+    mapTileShelters = [];
+    renderMarkers();
+    return;
+  }
+
+  if (tileInfo.z < TILE_Z_MIN || tileInfo.z > TILE_Z_MAX || tileInfo.tooManyTiles) {
+    mapTileShelters = [];
+    renderMarkers();
+    setMapNotice('??? ?? ??? ???? ?????.');
+    return;
+  }
+
+  var requestSeq = ++mapTileRequestSeq;
+  var query = buildQuery({
+    z: tileInfo.z,
+    tiles: tileInfo.tiles.join(','),
+    disasterType: getSelectedDisasterType(),
+    shelterType: getSelectedShelterType()
+  });
+
+  try {
+    var json = await SafeSpotApi.request({
+      service: 'public',
+      path: '/shelters/map/tiles?' + query,
+      method: 'GET'
+    });
+    if (requestSeq !== mapTileRequestSeq) return;
+    if (!json.success) throw new Error((json.error && json.error.message) || 'SERVER_ERROR');
+
+    mapTileShelters = dedupeShelters(extractMapTileItems(json.data).map(normalizeShelterItem));
+    setMapNotice('');
+    renderMarkers();
+  } catch (error) {
+    if (requestSeq !== mapTileRequestSeq) return;
+    mapTileShelters = [];
+    renderMarkers();
+    setMapNotice('?? ??? ??? ??? ? ????.');
+  }
+}
+
+async function refreshShelterView() {
+  await Promise.all([loadNearbyShelters(), loadMapTileShelters()]);
+}
+
+function filterShelters() {
+  var region = document.getElementById('regionSel').value;
+  if (region && region !== 'SEOUL') {
+    alert('??? ?????? ?????.');
+    document.getElementById('regionSel').value = 'SEOUL';
+    return;
+  }
+
+  selectedId = null;
+  document.getElementById('detailPanel').classList.remove('open');
+  document.getElementById('dpDetailWarn').style.display = 'none';
+
+  if (isRealMode()) {
+    refreshShelterView();
+    return;
+  }
+
+  loadNearbyShelters();
+  loadMapTileShelters();
+}
+
+function hdrDoSearch() {
+  document.getElementById('kwInput').value = document.getElementById('hdrSrch').value;
+  filterShelters();
+}
+
+function searchByGPS() {
+  var btn = document.getElementById('gpsBtn');
+  btn.textContent = '?? ?? ?? ?..';
   btn.classList.add('loading');
 
-  if(!navigator.geolocation){
-    alert('이 브라우저는 위치 정보를 지원하지 않습니다.');
-    btn.textContent = '📍 내 위치 기준 탐색';
+  if (!navigator.geolocation) {
+    alert('? ??????? ?? ??? ???? ????.');
+    btn.textContent = '?? ? ?? ?? ??';
     btn.classList.remove('loading');
     return;
   }
 
   navigator.geolocation.getCurrentPosition(
-    pos => {
+    function(pos) {
       userLat = pos.coords.latitude;
       userLng = pos.coords.longitude;
-      btn.textContent = '📍 내 위치 기준 탐색 (활성)';
+      btn.textContent = '?? ? ?? ?? ?? (??)';
       btn.classList.remove('loading');
       btn.classList.add('active');
       applyGPSFilter();
     },
-    () => {
-      btn.textContent = '📍 내 위치 기준 탐색';
+    function() {
+      btn.textContent = '?? ? ?? ?? ??';
       btn.classList.remove('loading');
-      alert('위치 정보를 가져올 수 없습니다.\n브라우저에서 위치 권한을 허용해주세요.');
+      alert('?? ??? ??? ? ????.\n?????? ?? ??? ??? ???.');
     },
     { enableHighAccuracy: true, timeout: 10000 }
   );
 }
 
-function applyGPSFilter(){
-  if(userMarker){
+function applyGPSFilter() {
+  if (userMarker) {
     userMarker.setMap(null);
     userMarker = null;
   }
-  if(userCircle){
+  if (userCircle) {
     userCircle.setMap(null);
     userCircle = null;
   }
 
-  const userPos = new kakao.maps.LatLng(userLat, userLng);
+  var userPos = new kakao.maps.LatLng(userLat, userLng);
 
-  userMarker = new kakao.maps.Marker({
-    position: userPos
-  });
+  userMarker = new kakao.maps.Marker({ position: userPos });
   userMarker.setMap(map);
 
   userCircle = new kakao.maps.Circle({
@@ -768,54 +1114,49 @@ function applyGPSFilter(){
 
   var bar = document.getElementById('gpsBar');
   bar.style.display = 'block';
-  bar.innerHTML = '📍 내 위치 기준 거리순 정렬 · 반경 3km 파란 원 표시';
+  bar.innerHTML = '?? ? ?? ?? ??? ?? ? ?? 3km ?? ??';
 
   map.setCenter(userPos);
   map.setLevel(5);
 
-  if(window.SAFESPOT_CONFIG.apiMode === 'real') {
-    var disasterType = document.getElementById('disasterSel').value;
-    loadShelters(userLat, userLng, 5000, disasterType);
+  if (isRealMode()) {
+    refreshShelterView();
     return;
   }
 
-  filteredShelters = SHELTERS.slice().sort(
-    function(a, b){ return haversine(userLat, userLng, a.lat, a.lng) - haversine(userLat, userLng, b.lat, b.lng); }
-  );
-  renderList();
-  renderMarkers();
+  filterShelters();
 }
 
-function resetGPS(){
+function resetGPS() {
   userLat = null;
   userLng = null;
 
-  if(userMarker){
+  if (userMarker) {
     userMarker.setMap(null);
     userMarker = null;
   }
-  if(userCircle){
+  if (userCircle) {
     userCircle.setMap(null);
     userCircle = null;
   }
 
   var btn = document.getElementById('gpsBtn');
-  btn.textContent = '📍 내 위치 기준 탐색';
+  btn.textContent = '?? ? ?? ?? ??';
   btn.classList.remove('active', 'loading');
 
   document.getElementById('gpsBar').style.display = 'none';
 
-  map.setCenter(new kakao.maps.LatLng(37.5665, 126.9780));
-  map.setLevel(8);
+  if (map) {
+    map.setCenter(new kakao.maps.LatLng(SEOUL_CITY_HALL.lat, SEOUL_CITY_HALL.lng));
+    map.setLevel(8);
+  }
 
-  if(window.SAFESPOT_CONFIG.apiMode === 'real') {
-    loadShelters(37.5665, 126.9780);
+  if (isRealMode()) {
+    refreshShelterView();
     return;
   }
 
-  filteredShelters = SHELTERS.slice();
-  renderList();
-  renderMarkers();
+  filterShelters();
 }
 
 function checkLogin(){
@@ -880,7 +1221,14 @@ function hdrSearch(){
   }
 }
 
+configureShelterFilters();
 initHeader();
+
+if(window.SafeSpotConfig && window.SafeSpotConfig.isRealMode()) {
+  var realStrip = document.getElementById('emgStrip');
+  if(realStrip) realStrip.style.display = 'none';
+  setListMessage('대피소 목록을 불러오는 중입니다.', false);
+}
 
 function showMapFallback(msg){
   var el = document.getElementById('map');
@@ -900,16 +1248,22 @@ kakao.maps.load(function(){
 
   map = new kakao.maps.Map(mapContainer, mapOption);
 
-  if(window.SAFESPOT_CONFIG.apiMode === 'real') {
-    loadShelters(37.5665, 126.9780);
+  if(isRealMode()) {
+    refreshShelterView();
+    kakao.maps.event.addListener(map, 'idle', function(){
+      if(mapIdleTimer) clearTimeout(mapIdleTimer);
+      mapIdleTimer = setTimeout(function(){
+        loadMapTileShelters();
+      }, MARKER_IDLE_DEBOUNCE_MS);
+    });
   } else {
-    renderList();
-    renderMarkers();
+    loadNearbyShelters();
+    loadMapTileShelters();
   }
 
   setTimeout(function(){
     map.relayout();
-    map.setCenter(new kakao.maps.LatLng(37.5665, 126.9780));
+    map.setCenter(new kakao.maps.LatLng(SEOUL_CITY_HALL.lat, SEOUL_CITY_HALL.lng));
   }, 100);
 });
 } // end kakao guard
