@@ -23,7 +23,10 @@ var DISASTER_TYPE_LABELS = {
 var SHELTER_TYPE_LABELS = {
   DESIGNATED: '지정대피소',
   TEMPORARY: '임시대피소',
-  WIDE: '광역대피소'
+  WIDE: '광역대피소',
+  지정대피소: '지정대피소',
+  임시대피소: '임시대피소',
+  광역대피소: '광역대피소'
 };
 
 var CONGESTION_LEVEL_LABELS = {
@@ -35,7 +38,7 @@ var CONGESTION_LEVEL_LABELS = {
 };
 
 function formatShelterStatus(status) {
-  return SHELTER_STATUS_LABELS[status] || status || '-';
+  return SHELTER_STATUS_LABELS[status] || status || '정보없음';
 }
 
 function formatEntryStatus(status) {
@@ -51,26 +54,26 @@ function formatShelterType(type) {
 }
 
 function formatCongestionLevel(level) {
-  return CONGESTION_LEVEL_LABELS[level] || level || '-';
+  return CONGESTION_LEVEL_LABELS[level] || level || '정보없음';
 }
 
 function normalizeUiStatus(item) {
   item = item || {};
 
-  var shelterStatus = String(item.shelterStatus || '').toUpperCase();
+  var shelterStatus = String(item.shelterStatus || item.status || '').toUpperCase();
   var congestionLevel = String(item.congestionLevel || '').toUpperCase();
 
   if (shelterStatus === 'FULL' || congestionLevel === 'FULL') return 'full';
   if (shelterStatus === 'STOPPED') return 'stopped';
   if (congestionLevel === 'HIGH' || congestionLevel === 'BUSY') return 'ready';
   if (
-    shelterStatus === 'OPERATING' ||
     shelterStatus === 'OPEN' ||
     shelterStatus === 'AVAILABLE' ||
-    congestionLevel === 'LOW' ||
-    congestionLevel === 'MEDIUM'
+    shelterStatus === 'OPERATING'
   ) {
     return 'open';
   }
-  return 'ready';
+  if (shelterStatus === 'PREPARING') return 'ready';
+  if (congestionLevel === 'LOW' || congestionLevel === 'MEDIUM') return 'open';
+  return 'unknown';
 }

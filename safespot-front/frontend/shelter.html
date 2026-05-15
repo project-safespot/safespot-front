@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>대피소 찾기 - 국민재난대피포털</title>
+<title>대피소 찾기 - 국민재난안전포털</title>
 <link rel="stylesheet" href="_common.css">
 <script src="config.js"></script>
 <script src="js/auth.js"></script>
@@ -59,7 +59,7 @@
 .map-legend{position:absolute;bottom:20px;right:12px;background:#fff;border:1px solid var(--border);padding:10px 14px;font-size:13px;z-index:999;box-shadow:0 2px 8px rgba(0,0,0,.12);}
 .map-legend h4{font-size:13px;font-weight:700;color:var(--navy);margin-bottom:7px;}
 .legend-row{display:flex;align-items:center;gap:7px;margin-bottom:4px;}
-.legend-dot{width:12px;height:12px;border-radius:50%;flex-shrink:0;}
+.legend-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
 .dot-open{background:#1a7f3c;}
 .dot-full{background:#c8102e;}
 .dot-ready{background:#e8a000;}
@@ -73,7 +73,9 @@
 .sdp-actions button{flex:1;padding:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;border:none;}
 .btn-nav{background:var(--navy);color:#fff;}
 .btn-checkin{background:var(--red);color:#fff;}
-.mk{width:22px;height:22px;border-radius:50%;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;}
+.mk{width:10px;height:10px;border-radius:50%;border:1.5px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.28);display:block;cursor:pointer;transition:transform .12s ease, box-shadow .12s ease;}
+.mk:hover{transform:scale(1.18);}
+.mk-selected{width:16px;height:16px;box-shadow:0 0 0 3px rgba(29,52,97,.18),0 2px 6px rgba(0,0,0,.3);}
 .mk-open{background:#1a7f3c;}
 .mk-full{background:#c8102e;}
 .mk-ready{background:#e8a000;}
@@ -288,13 +290,13 @@
       <h2>내 주변 대피소</h2>
       <div class="filter-row">
         <select id="regionSel" onchange="filterShelters()">
-          <option value="SEOUL">?????</option>
+          <option value="SEOUL">서울특별시</option>
         </select>
         <select id="typeSel" onchange="filterShelters()">
-          <option value="">?? ??? ??</option>
-          <option value="DESIGNATED">?????</option>
-          <option value="TEMPORARY">?????</option>
-          <option value="WIDE">?????</option>
+          <option value="">전체 대피소 유형</option>
+          <option value="DESIGNATED">지정대피소</option>
+          <option value="TEMPORARY">임시대피소</option>
+          <option value="WIDE">광역대피소</option>
         </select>
       </div>
       <!-- 재난유형 필터 -->
@@ -408,12 +410,15 @@
 //   distanceM, capacityTotal, currentOccupancy, availableCapacity, congestionLevel, shelterStatus, updatedAt
 // Note: contact and facility are NOT included in the nearby response — use mapShelterDetail for those.
 const SEOUL_CITY_HALL = { lat: 37.5665, lng: 126.9780 };
+const SEOUL_SUPPORT_BOUNDS = { minLat: 37.41, maxLat: 37.71, minLng: 126.73, maxLng: 127.19 };
 const DEFAULT_NEARBY_RADIUS = 5000;
 const DEFAULT_NEARBY_LIMIT = 50;
 const MARKER_IDLE_DEBOUNCE_MS = 400;
 const MAX_TILE_COUNT = 64;
 const TILE_Z_MIN = 11;
 const TILE_Z_MAX = 16;
+const MIN_MARKER_TILE_Z = 13;
+const GPS_LOW_ACCURACY_METERS = 1000;
 
 function numberOrNull(value) {
   if (value === null || value === undefined || value === '') return null;
@@ -528,10 +533,44 @@ function getListCenter() {
   return { lat: SEOUL_CITY_HALL.lat, lng: SEOUL_CITY_HALL.lng };
 }
 
+function isWithinSeoulSupport(lat, lng) {
+  return Number.isFinite(lat) &&
+    Number.isFinite(lng) &&
+    lat >= SEOUL_SUPPORT_BOUNDS.minLat &&
+    lat <= SEOUL_SUPPORT_BOUNDS.maxLat &&
+    lng >= SEOUL_SUPPORT_BOUNDS.minLng &&
+    lng <= SEOUL_SUPPORT_BOUNDS.maxLng;
+}
+
+function isCurrentMapCenterInSeoul() {
+  var center = getListCenter();
+  return isWithinSeoulSupport(center.lat, center.lng);
+}
+
+function getCurrentAccuracyText() {
+  if (!Number.isFinite(userAccuracy)) return '';
+  return '위치 정확도 약 ' + Math.round(userAccuracy) + 'm';
+}
+
+function getListEmptyMessage() {
+  var disasterType = getSelectedDisasterType();
+
+  if (!isCurrentMapCenterInSeoul()) {
+    return '현재 시범 서비스는 서울 지역 대피소만 제공합니다.';
+  }
+  if (disasterType === 'LANDSLIDE') {
+    return '현재 산사태 대피소 데이터가 준비 중입니다.';
+  }
+  if (disasterType === 'EARTHQUAKE') {
+    return '현재 지진 대피소 데이터가 준비 중입니다.';
+  }
+  return '조건에 맞는 대피소가 없습니다.';
+}
+
 function normalizeShelterTypeCode(type) {
-  if (type === 'DESIGNATED' || type === '?????') return 'DESIGNATED';
-  if (type === 'TEMPORARY' || type === '?????') return 'TEMPORARY';
-  if (type === 'WIDE' || type === '?????') return 'WIDE';
+  if (type === 'DESIGNATED' || type === '지정대피소') return 'DESIGNATED';
+  if (type === 'TEMPORARY' || type === '임시대피소') return 'TEMPORARY';
+  if (type === 'WIDE' || type === '광역대피소') return 'WIDE';
   return type || '';
 }
 
@@ -603,7 +642,7 @@ function escapeHtml(value) {
 function setListMessage(message, isError) {
   var el = document.getElementById('shelterList');
   var countEl = document.getElementById('shelterCount');
-  if (countEl) countEl.innerHTML = '<strong>0?</strong> ??? ?? ?';
+  if (countEl) countEl.innerHTML = '<strong>가까운 대피소 0개</strong>';
   if (el) {
     el.innerHTML = '<div style="padding:20px;color:' + (isError ? '#c00' : '#888') + ';font-size:14px;">' + escapeHtml(message) + '</div>';
   }
@@ -652,22 +691,31 @@ let nearbyShelters = (window.SafeSpotConfig && window.SafeSpotConfig.isMockMode(
 let mapTileShelters = (window.SafeSpotConfig && window.SafeSpotConfig.isMockMode()) ? MOCK_SHELTERS.map(normalizeShelterItem) : [];
 let listFilteredShelters = nearbyShelters.slice();
 let map, markers = [], selectedId = null;
-let userLat = null, userLng = null, userMarker = null, userCircle = null;
+let userLat = null, userLng = null, userAccuracy = null, userMarker = null, userCircle = null;
 let mapIdleTimer = null;
 let nearbyRequestSeq = 0;
 let mapTileRequestSeq = 0;
 
 function configureShelterFilters() {
   var regionSel = document.getElementById('regionSel');
-  if (regionSel) regionSel.innerHTML = '<option value="SEOUL">?????</option>';
+  if (regionSel) regionSel.innerHTML = '<option value="SEOUL">서울특별시</option>';
 
   var typeSel = document.getElementById('typeSel');
   if (typeSel) {
     typeSel.innerHTML = '' +
-      '<option value="">?? ??? ??</option>' +
-      '<option value="DESIGNATED">?????</option>' +
-      '<option value="TEMPORARY">?????</option>' +
-      '<option value="WIDE">?????</option>';
+      '<option value="">전체 대피소 유형</option>' +
+      '<option value="DESIGNATED">지정대피소</option>' +
+      '<option value="TEMPORARY">임시대피소</option>' +
+      '<option value="WIDE">광역대피소</option>';
+  }
+
+  var disasterSel = document.getElementById('disasterSel');
+  if (disasterSel) {
+    disasterSel.innerHTML = '' +
+      '<option value="">전체 재난유형</option>' +
+      '<option value="EARTHQUAKE">지진</option>' +
+      '<option value="FLOOD">홍수</option>' +
+      '<option value="LANDSLIDE">산사태</option>';
   }
 }
 
@@ -699,15 +747,14 @@ function applyListFilters(items) {
 function renderList() {
   var el = document.getElementById('shelterList');
   var countEl = document.getElementById('shelterCount');
-  var keyword = document.getElementById('kwInput').value.trim();
 
   if (!el || !countEl) return;
 
-  countEl.innerHTML = '<strong>' + listFilteredShelters.length + '?</strong> ??? ?? ?' + (isRealMode() && keyword ? ' (?? nearby ?? ? ??)' : '');
+  countEl.innerHTML = '<strong>가까운 대피소 ' + listFilteredShelters.length + '개</strong>';
 
   if (!listFilteredShelters.length) {
     el.innerHTML = '<div style="padding:20px;color:#888;font-size:14px;">' +
-      (keyword ? '?? nearby ?? ??? ?? ??? ???? ???? ????.' : '??? ???? ????.') +
+      escapeHtml(getListEmptyMessage()) +
       '</div>';
     return;
   }
@@ -731,7 +778,7 @@ function renderList() {
         '<div class="shelter-meta">' +
           '<span>' + escapeHtml(formatShelterType(shelter.type)) + '</span>' +
           '<span><span class="cap-bar"><span class="cap-fill ' + capFillClass(pct) + '" style="width:' + pct + '%"></span></span>' +
-            shelter.cur.toLocaleString() + '/' + shelter.cap.toLocaleString() + '?</span>' +
+            shelter.cur.toLocaleString() + '/' + shelter.cap.toLocaleString() + '명</span>' +
         '</div>' +
       '</div>';
   }).join('');
@@ -760,11 +807,11 @@ function showShelterDetail(shelter, warnMessage) {
   if (shelter.disasterType) {
     dpDisasterEl.innerHTML = '<span class="disaster-badge ' + disasterBadgeClass(shelter.disasterType) + '">' + escapeHtml(formatDisasterType(shelter.disasterType)) + '</span>';
   } else {
-    dpDisasterEl.textContent = '?? ??';
+    dpDisasterEl.textContent = '정보없음';
   }
 
-  document.getElementById('dpCap').textContent = shelter.cap.toLocaleString() + '?';
-  document.getElementById('dpCur').textContent = shelter.cur.toLocaleString() + '? (' + capPercent(shelter.cur, shelter.cap) + '%)';
+  document.getElementById('dpCap').textContent = shelter.cap.toLocaleString() + '명';
+  document.getElementById('dpCur').textContent = shelter.cur.toLocaleString() + '명 (' + capPercent(shelter.cur, shelter.cap) + '%)';
   document.getElementById('dpStatus').innerHTML = '<span class="shelter-badge ' + statusBadge(normalizeUiStatus(shelter)) + '">' + escapeHtml(getPrimaryStatusText(shelter)) + '</span>';
   document.getElementById('dpTel').textContent = shelter.tel || '-';
   document.getElementById('dpFacility').textContent = shelter.facility || '-';
@@ -779,6 +826,7 @@ function showShelterDetail(shelter, warnMessage) {
 async function selectShelter(id) {
   selectedId = id;
   renderList();
+  renderMarkers();
 
   if (isRealMode()) {
     try {
@@ -789,13 +837,13 @@ async function selectShelter(id) {
     } catch (error) {
       var cached = findShelterById(id);
       if (cached) {
-        showShelterDetail(cached, '?? ??? ?? ??? ???? ?? ??/?? ???? ?????.');
+        showShelterDetail(cached, '상세 정보를 불러오지 못해 목록 또는 지도 기준 정보만 표시합니다.');
         return;
       }
 
       document.getElementById('detailPanel').classList.add('open');
       document.getElementById('dpDetailWarn').style.display = 'none';
-      document.getElementById('dpName').textContent = '?? ??? ??? ? ????.';
+      document.getElementById('dpName').textContent = '상세 정보를 불러올 수 없습니다.';
       ['dpAddr', 'dpType', 'dpCap', 'dpCur', 'dpTel', 'dpFacility'].forEach(function(fieldId) {
         document.getElementById(fieldId).textContent = '-';
       });
@@ -819,7 +867,7 @@ function closeDetail() {
 function openNavi() {
   var shelter = findShelterById(selectedId);
   if (!shelter) {
-    alert('?? ???? ??? ???.');
+    alert('선택된 대피소 정보가 없습니다.');
     return;
   }
 
@@ -837,8 +885,9 @@ function renderMarkers() {
     if (!Number.isFinite(shelter.lat) || !Number.isFinite(shelter.lng)) return;
 
     var uiStatus = normalizeUiStatus(shelter);
+    var selectedClass = String(selectedId) === String(shelter.id) ? ' mk-selected' : '';
     var overlay = new kakao.maps.CustomOverlay({
-      content: '<div class="mk ' + mkClass(uiStatus) + '" onclick="selectShelter(' + shelter.id + ')" style="cursor:pointer;">' + (uiStatus === 'full' ? '!' : '') + '</div>',
+      content: '<div class="mk ' + mkClass(uiStatus) + selectedClass + '" onclick="selectShelter(' + shelter.id + ')" aria-label="' + escapeHtml(shelter.name) + '"></div>',
       position: new kakao.maps.LatLng(shelter.lat, shelter.lng),
       yAnchor: 0.5,
       xAnchor: 0.5
@@ -944,7 +993,7 @@ async function loadNearbyShelters() {
     shelterType: getSelectedShelterType()
   });
 
-  setListMessage('??? ??? ???? ????.', false);
+  setListMessage('대피소 목록을 불러오는 중입니다.', false);
 
   try {
     var json = await SafeSpotApi.request({
@@ -962,7 +1011,7 @@ async function loadNearbyShelters() {
     if (requestSeq !== nearbyRequestSeq) return;
     nearbyShelters = [];
     listFilteredShelters = [];
-    setListMessage('??? ??? ??? ? ????.', true);
+    setListMessage('대피소 목록을 불러올 수 없습니다.', true);
   }
 }
 
@@ -983,6 +1032,13 @@ async function loadMapTileShelters() {
     return;
   }
 
+  if (!isCurrentMapCenterInSeoul()) {
+    mapTileShelters = [];
+    renderMarkers();
+    setMapNotice('현재 시범 서비스는 서울 지역 대피소만 제공합니다.');
+    return;
+  }
+
   var tileInfo = getVisibleTiles(map);
   if (!tileInfo.tiles.length) {
     mapTileShelters = [];
@@ -990,10 +1046,10 @@ async function loadMapTileShelters() {
     return;
   }
 
-  if (tileInfo.z < TILE_Z_MIN || tileInfo.z > TILE_Z_MAX || tileInfo.tooManyTiles) {
+  if (tileInfo.z < MIN_MARKER_TILE_Z || tileInfo.tooManyTiles) {
     mapTileShelters = [];
     renderMarkers();
-    setMapNotice('??? ?? ??? ???? ?????.');
+    setMapNotice('지도를 확대해 대피소를 확인하세요.');
     return;
   }
 
@@ -1015,13 +1071,13 @@ async function loadMapTileShelters() {
     if (!json.success) throw new Error((json.error && json.error.message) || 'SERVER_ERROR');
 
     mapTileShelters = dedupeShelters(extractMapTileItems(json.data).map(normalizeShelterItem));
-    setMapNotice('');
+    setMapNotice(mapTileShelters.length ? '' : getListEmptyMessage());
     renderMarkers();
   } catch (error) {
     if (requestSeq !== mapTileRequestSeq) return;
     mapTileShelters = [];
     renderMarkers();
-    setMapNotice('?? ??? ??? ??? ? ????.');
+    setMapNotice('지도 대피소 정보를 불러올 수 없습니다.');
   }
 }
 
@@ -1032,7 +1088,7 @@ async function refreshShelterView() {
 function filterShelters() {
   var region = document.getElementById('regionSel').value;
   if (region && region !== 'SEOUL') {
-    alert('??? ?????? ?????.');
+    alert('현재는 서울특별시만 지원합니다.');
     document.getElementById('regionSel').value = 'SEOUL';
     return;
   }
@@ -1057,13 +1113,19 @@ function hdrDoSearch() {
 
 function searchByGPS() {
   var btn = document.getElementById('gpsBtn');
-  btn.textContent = '?? ?? ?? ?..';
+  btn.textContent = '현재 위치 확인 중...';
   btn.classList.add('loading');
 
   if (!navigator.geolocation) {
-    alert('? ??????? ?? ??? ???? ????.');
-    btn.textContent = '?? ? ?? ?? ??';
+    alert('현재 위치를 불러올 수 없습니다. 서울시청 기준으로 대피소를 표시합니다.');
+    btn.textContent = '현재 위치 기준 검색';
     btn.classList.remove('loading');
+    if (map) {
+      map.setCenter(new kakao.maps.LatLng(SEOUL_CITY_HALL.lat, SEOUL_CITY_HALL.lng));
+      map.setLevel(7);
+    }
+    if (isRealMode()) refreshShelterView();
+    else filterShelters();
     return;
   }
 
@@ -1071,17 +1133,25 @@ function searchByGPS() {
     function(pos) {
       userLat = pos.coords.latitude;
       userLng = pos.coords.longitude;
-      btn.textContent = '?? ? ?? ?? ?? (??)';
+      userAccuracy = numberOrNull(pos.coords.accuracy);
+      btn.textContent = '현재 위치 기준 검색 (적용중)';
       btn.classList.remove('loading');
       btn.classList.add('active');
       applyGPSFilter();
     },
     function() {
-      btn.textContent = '?? ? ?? ?? ??';
+      userAccuracy = null;
+      btn.textContent = '현재 위치 기준 검색';
       btn.classList.remove('loading');
-      alert('?? ??? ??? ? ????.\n?????? ?? ??? ??? ???.');
+      alert('현재 위치를 불러올 수 없습니다. 서울시청 기준으로 대피소를 표시합니다.');
+      if (map) {
+        map.setCenter(new kakao.maps.LatLng(SEOUL_CITY_HALL.lat, SEOUL_CITY_HALL.lng));
+        map.setLevel(7);
+      }
+      if (isRealMode()) refreshShelterView();
+      else filterShelters();
     },
-    { enableHighAccuracy: true, timeout: 10000 }
+    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
   );
 }
 
@@ -1113,8 +1183,14 @@ function applyGPSFilter() {
   userCircle.setMap(map);
 
   var bar = document.getElementById('gpsBar');
+  var accuracyText = getCurrentAccuracyText();
+  var accuracyWarning = Number.isFinite(userAccuracy) && userAccuracy > GPS_LOW_ACCURACY_METERS
+    ? ' 현재 위치 정확도가 낮습니다. 지도에서 직접 위치를 조정해 주세요.'
+    : '';
   bar.style.display = 'block';
-  bar.innerHTML = '?? ? ?? ?? ??? ?? ? ?? 3km ?? ??';
+  bar.textContent = '현재 위치 기준 반경 약 3km 대피소를 표시합니다.' +
+    (accuracyText ? ' ' + accuracyText + '.' : '') +
+    accuracyWarning;
 
   map.setCenter(userPos);
   map.setLevel(5);
@@ -1130,6 +1206,7 @@ function applyGPSFilter() {
 function resetGPS() {
   userLat = null;
   userLng = null;
+  userAccuracy = null;
 
   if (userMarker) {
     userMarker.setMap(null);
@@ -1141,14 +1218,14 @@ function resetGPS() {
   }
 
   var btn = document.getElementById('gpsBtn');
-  btn.textContent = '?? ? ?? ?? ??';
+  btn.textContent = '현재 위치 기준 검색';
   btn.classList.remove('active', 'loading');
 
   document.getElementById('gpsBar').style.display = 'none';
 
   if (map) {
     map.setCenter(new kakao.maps.LatLng(SEOUL_CITY_HALL.lat, SEOUL_CITY_HALL.lng));
-    map.setLevel(8);
+    map.setLevel(7);
   }
 
   if (isRealMode()) {
@@ -1247,6 +1324,7 @@ kakao.maps.load(function(){
   };
 
   map = new kakao.maps.Map(mapContainer, mapOption);
+  window.__shelterMap = map;
 
   if(isRealMode()) {
     refreshShelterView();
