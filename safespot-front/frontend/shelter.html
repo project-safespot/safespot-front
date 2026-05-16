@@ -419,7 +419,9 @@ const MAX_TILE_COUNT = 64;
 const TILE_Z_MIN = 11;
 const TILE_Z_MAX = 16;
 const MIN_MARKER_TILE_Z = 13;
-const GPS_LOW_ACCURACY_METERS = 1000;
+const GPS_TARGET_ACCURACY_METERS = 100;
+const GPS_MAX_ACCEPTABLE_ACCURACY_METERS = 1000;
+const GPS_BEST_POSITION_TIMEOUT_MS = 9000;
 
 function numberOrNull(value) {
   if (value === null || value === undefined || value === '') return null;
@@ -542,6 +544,9 @@ function getSelectedShelterType() {
 }
 
 function getListCenter() {
+  if (currentSearchCenter && Number.isFinite(currentSearchCenter.lat) && Number.isFinite(currentSearchCenter.lng)) {
+    return { lat: currentSearchCenter.lat, lng: currentSearchCenter.lng };
+  }
   if (userLat !== null && userLng !== null) return { lat: userLat, lng: userLng };
   if (map) {
     var center = map.getCenter();
@@ -567,6 +572,29 @@ function isCurrentMapCenterInSeoul() {
 function getCurrentAccuracyText() {
   if (!Number.isFinite(userAccuracy)) return '';
   return '위치 정확도 약 ' + Math.round(userAccuracy) + 'm';
+}
+
+function setSearchCenterMarker(lat, lng) {
+  if (!map || !window.kakao || !kakao.maps || !kakao.maps.Marker) return;
+  if (!searchCenterMarker) {
+    searchCenterMarker = new kakao.maps.Marker({ position: new kakao.maps.LatLng(lat, lng) });
+  } else {
+    searchCenterMarker.setPosition(new kakao.maps.LatLng(lat, lng));
+  }
+  searchCenterMarker.setMap(map);
+}
+
+function setCurrentSearchCenter(lat, lng, source) {
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+  currentSearchCenter = { lat: lat, lng: lng, source: source || 'auto' };
+  if (source === 'manual') manualSearchCenter = { lat: lat, lng: lng };
+  setSearchCenterMarker(lat, lng);
+}
+
+function clearCurrentSearchCenter() {
+  currentSearchCenter = null;
+  manualSearchCenter = null;
+  if (searchCenterMarker) searchCenterMarker.setMap(null);
 }
 
 function getListEmptyMessage() {
@@ -716,6 +744,9 @@ let listFilteredShelters = nearbyShelters.slice();
 let map, markers = [], selectedId = null;
 let currentDisasterType = '';
 let userLat = null, userLng = null, userAccuracy = null, userMarker = null, userCircle = null;
+let currentSearchCenter = null;
+let manualSearchCenter = null;
+let searchCenterMarker = null;
 let mapIdleTimer = null;
 let nearbyRequestSeq = 0;
 let mapTileRequestSeq = 0;
@@ -1001,6 +1032,12 @@ async function loadNearbyShelters() {
   }
 
   var center = getListCenter();
+  if (!isWithinSeoulSupport(center.lat, center.lng)) {
+    nearbyShelters = [];
+    listFilteredShelters = [];
+    setListMessage('현재 시범 서비스는 서울 지역 대피소만 제공합니다.', false);
+    return;
+  }
   var requestSeq = ++nearbyRequestSeq;
   var query = buildQuery({
     lat: center.lat,
@@ -1130,48 +1167,132 @@ function hdrDoSearch() {
   filterShelters();
 }
 
+function getBestCurrentPosition(options) {
+  var targetAccuracy = Number(options && options.targetAccuracy) || GPS_TARGET_ACCURACY_METERS;
+  var timeoutMs = Number(options && options.timeoutMs) || GPS_BEST_POSITION_TIMEOUT_MS;
+  var maxAcceptableAccuracy = Number(options && options.maxAcceptableAccuracy) || GPS_MAX_ACCEPTABLE_ACCURACY_METERS;
+
+  return new Promise(function(resolve, reject) {
+    if (!navigator.geolocation || typeof navigator.geolocation.watchPosition !== 'function') {
+      reject(new Error('GEOLOCATION_UNAVAILABLE'));
+      return;
+    }
+
+    var bestPos = null;
+    var done = false;
+    var watchId = null;
+    var timeoutId = null;
+
+    function finishSuccess(pos) {
+      if (done) return;
+      done = true;
+      if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+      if (timeoutId !== null) clearTimeout(timeoutId);
+      resolve(pos);
+    }
+
+    function finishError(error) {
+      if (done) return;
+      done = true;
+      if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+      if (timeoutId !== null) clearTimeout(timeoutId);
+      reject(error || new Error('GEOLOCATION_FAILED'));
+    }
+
+    watchId = navigator.geolocation.watchPosition(function(pos) {
+      var accuracy = numberOrNull(pos && pos.coords && pos.coords.accuracy);
+      if (!bestPos) {
+        bestPos = pos;
+      } else {
+        var bestAccuracy = numberOrNull(bestPos && bestPos.coords && bestPos.coords.accuracy);
+        if (!Number.isFinite(bestAccuracy) || (Number.isFinite(accuracy) && accuracy < bestAccuracy)) {
+          bestPos = pos;
+        }
+      }
+      if (Number.isFinite(accuracy) && accuracy <= targetAccuracy) {
+        finishSuccess(pos);
+      }
+    }, function(err) {
+      var bestAccuracy = numberOrNull(bestPos && bestPos.coords && bestPos.coords.accuracy);
+      if (bestPos && Number.isFinite(bestAccuracy) && bestAccuracy <= maxAcceptableAccuracy) {
+        finishSuccess(bestPos);
+        return;
+      }
+      finishError(err);
+    }, {
+      enableHighAccuracy: true,
+      timeout: timeoutMs,
+      maximumAge: 0
+    });
+
+    timeoutId = setTimeout(function() {
+      var bestAccuracy = numberOrNull(bestPos && bestPos.coords && bestPos.coords.accuracy);
+      if (bestPos && Number.isFinite(bestAccuracy) && bestAccuracy <= maxAcceptableAccuracy) {
+        finishSuccess(bestPos);
+        return;
+      }
+      finishError(new Error('LOW_ACCURACY_TIMEOUT'));
+    }, timeoutMs);
+  });
+}
+
 function searchByGPS() {
   var btn = document.getElementById('gpsBtn');
-  btn.textContent = '현재 위치 확인 중...';
+  btn.textContent = '?? ?? ?? ?...';
   btn.classList.add('loading');
 
-  if (!navigator.geolocation) {
-    alert('현재 위치를 불러올 수 없습니다. 서울시청 기준으로 대피소를 표시합니다.');
-    btn.textContent = '현재 위치 기준 검색';
-    btn.classList.remove('loading');
+  function handleLowAccuracyOrFail(accuracyValue) {
+    userLat = null;
+    userLng = null;
+    userAccuracy = Number.isFinite(accuracyValue) ? accuracyValue : null;
+    clearCurrentSearchCenter();
+    setCurrentSearchCenter(SEOUL_CITY_HALL.lat, SEOUL_CITY_HALL.lng, 'fallback');
+
+    btn.textContent = '? ?? ?? ??';
+    btn.classList.remove('loading', 'active');
+
+    var bar = document.getElementById('gpsBar');
+    bar.style.display = 'block';
+    bar.textContent = '?? ?? ???? ????. ???? ??? ?? ????? ???? ???? ??? ???.' +
+      (Number.isFinite(userAccuracy) ? (' ?? ??? ? ' + Math.round(userAccuracy) + 'm.') : '');
+
     if (map) {
       map.setCenter(new kakao.maps.LatLng(SEOUL_CITY_HALL.lat, SEOUL_CITY_HALL.lng));
       map.setLevel(7);
     }
+
     if (isRealMode()) refreshShelterView();
     else filterShelters();
-    return;
   }
 
-  navigator.geolocation.getCurrentPosition(
-    function(pos) {
-      userLat = pos.coords.latitude;
-      userLng = pos.coords.longitude;
-      userAccuracy = numberOrNull(pos.coords.accuracy);
-      btn.textContent = '현재 위치 기준 검색 (적용중)';
-      btn.classList.remove('loading');
-      btn.classList.add('active');
-      applyGPSFilter();
-    },
-    function() {
-      userAccuracy = null;
-      btn.textContent = '현재 위치 기준 검색';
-      btn.classList.remove('loading');
-      alert('현재 위치를 불러올 수 없습니다. 서울시청 기준으로 대피소를 표시합니다.');
-      if (map) {
-        map.setCenter(new kakao.maps.LatLng(SEOUL_CITY_HALL.lat, SEOUL_CITY_HALL.lng));
-        map.setLevel(7);
-      }
-      if (isRealMode()) refreshShelterView();
-      else filterShelters();
-    },
-    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-  );
+  getBestCurrentPosition({
+    targetAccuracy: GPS_TARGET_ACCURACY_METERS,
+    maxAcceptableAccuracy: GPS_MAX_ACCEPTABLE_ACCURACY_METERS,
+    timeoutMs: GPS_BEST_POSITION_TIMEOUT_MS
+  }).then(function(pos) {
+    userLat = pos.coords.latitude;
+    userLng = pos.coords.longitude;
+    userAccuracy = numberOrNull(pos.coords.accuracy);
+
+    if (Number.isFinite(userAccuracy) && userAccuracy > GPS_MAX_ACCEPTABLE_ACCURACY_METERS) {
+      handleLowAccuracyOrFail(userAccuracy);
+      return;
+    }
+
+    if (!isWithinSeoulSupport(userLat, userLng)) {
+      handleLowAccuracyOrFail(userAccuracy);
+      setMapNotice('?? ?? ???? ?? ?? ???? ?????.');
+      return;
+    }
+
+    setCurrentSearchCenter(userLat, userLng, 'gps');
+    btn.textContent = '? ?? ?? ??(???)';
+    btn.classList.remove('loading');
+    btn.classList.add('active');
+    applyGPSFilter();
+  }).catch(function() {
+    handleLowAccuracyOrFail(userAccuracy);
+  });
 }
 
 function applyGPSFilter() {
@@ -1203,8 +1324,8 @@ function applyGPSFilter() {
 
   var bar = document.getElementById('gpsBar');
   var accuracyText = getCurrentAccuracyText();
-  var accuracyWarning = Number.isFinite(userAccuracy) && userAccuracy > GPS_LOW_ACCURACY_METERS
-    ? ' 현재 위치 정확도가 낮습니다. 지도에서 직접 위치를 조정해 주세요.'
+  var accuracyWarning = Number.isFinite(userAccuracy) && userAccuracy > GPS_TARGET_ACCURACY_METERS
+    ? ' ?? ???? ?? ? ????. ???? ??? ?? ???? ???? ? ????.'
     : '';
   bar.style.display = 'block';
   bar.textContent = '현재 위치 기준 반경 약 3km 대피소를 표시합니다.' +
@@ -1226,6 +1347,7 @@ function resetGPS() {
   userLat = null;
   userLng = null;
   userAccuracy = null;
+  clearCurrentSearchCenter();
 
   if (userMarker) {
     userMarker.setMap(null);
@@ -1345,9 +1467,27 @@ kakao.maps.load(function(){
 
   map = new kakao.maps.Map(mapContainer, mapOption);
   window.__shelterMap = map;
+  setCurrentSearchCenter(SEOUL_CITY_HALL.lat, SEOUL_CITY_HALL.lng, 'default');
 
   if(isRealMode()) {
     refreshShelterView();
+    kakao.maps.event.addListener(map, 'click', function(mouseEvent){
+      var latlng = mouseEvent && mouseEvent.latLng;
+      if (!latlng) return;
+      var lat = latlng.getLat();
+      var lng = latlng.getLng();
+      setCurrentSearchCenter(lat, lng, 'manual');
+      var bar = document.getElementById('gpsBar');
+      bar.style.display = 'block';
+      if (!isWithinSeoulSupport(lat, lng)) {
+        bar.textContent = '현재 시범 서비스는 서울 지역 대피소만 제공합니다.';
+        setMapNotice('현재 시범 서비스는 서울 지역 대피소만 제공합니다.');
+      } else {
+        bar.textContent = '지도에서 선택한 위치 기준으로 조회합니다.';
+        setMapNotice('');
+      }
+      refreshShelterView();
+    });
     kakao.maps.event.addListener(map, 'idle', function(){
       if(mapIdleTimer) clearTimeout(mapIdleTimer);
       mapIdleTimer = setTimeout(function(){
