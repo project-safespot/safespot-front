@@ -772,7 +772,9 @@ function safeTimestampFallback(value){
 function formatKstDateTime(value){
   if(value == null || value === '') return '-';
   const raw = String(value).trim();
-  const normalized = raw.includes('T') ? raw : raw.replace(/^(\d{4}-\d{2}-\d{2}) /, '$1T');
+  let normalized = raw.includes('T') ? raw : raw.replace(/^(\d{4}-\d{2}-\d{2}) /, '$1T');
+  normalized = normalized.replace(/([+-]\d{2})$/, '$1:00');
+  normalized = normalized.replace(/([+-]\d{2})(\d{2})$/, '$1:$2');
   const parsed = Date.parse(normalized);
   if(Number.isNaN(parsed)) return safeTimestampFallback(raw);
   const parts = new Intl.DateTimeFormat('sv-SE', {
@@ -1043,18 +1045,23 @@ function updateDashboardLocation(next){
   updateHeroMeta();
 }
 
+function buildDashboardFallbackLocation(noteLine, accuracy){
+  const accuracyText = accuracy != null ? `위치 정확도 약 ${Math.round(accuracy)}m` : '';
+  return {
+    lat: DASHBOARD_CENTER.lat,
+    lng: DASHBOARD_CENTER.lng,
+    source: 'fallback',
+    heroLabel: '서울시청 기준',
+    statusLine: '서울시청 기준 · 반경 5km',
+    noteLine: [noteLine, accuracyText].filter(Boolean).join(' '),
+    accuracy: accuracy == null ? null : accuracy
+  };
+}
+
 function resolveDashboardLocation(){
   return new Promise(resolve => {
     if(!navigator.geolocation || typeof navigator.geolocation.getCurrentPosition !== 'function'){
-      updateDashboardLocation({
-        lat: DASHBOARD_CENTER.lat,
-        lng: DASHBOARD_CENTER.lng,
-        source: 'fallback',
-        heroLabel: '서울시청 기준',
-        statusLine: '서울시청 기준 · 반경 5km',
-        noteLine: '현재 위치를 불러올 수 없습니다. 서울시청 기준으로 대피소를 표시합니다.',
-        accuracy: null
-      });
+      updateDashboardLocation(buildDashboardFallbackLocation('현재 위치를 불러올 수 없습니다. 서울시청 기준으로 대피소를 표시합니다.', null));
       resolve(dashboardState.location);
       return;
     }
@@ -1062,16 +1069,18 @@ function resolveDashboardLocation(){
       const lat = toNumber(position && position.coords && position.coords.latitude);
       const lng = toNumber(position && position.coords && position.coords.longitude);
       const accuracy = toNumber(position && position.coords && position.coords.accuracy);
-      if(lat == null || lng == null || !isWithinSeoulBounds(lat, lng)){
-        updateDashboardLocation({
-          lat: DASHBOARD_CENTER.lat,
-          lng: DASHBOARD_CENTER.lng,
-          source: 'fallback',
-          heroLabel: '서울시청 기준',
-          statusLine: '서울시청 기준 · 반경 5km',
-          noteLine: '현재 시범 서비스는 서울 지역 대피소만 제공합니다.',
-          accuracy
-        });
+      if(lat == null || lng == null){
+        updateDashboardLocation(buildDashboardFallbackLocation('현재 위치를 불러올 수 없습니다. 서울시청 기준으로 대피소를 표시합니다.', accuracy));
+        resolve(dashboardState.location);
+        return;
+      }
+      if(accuracy != null && accuracy > 1000){
+        updateDashboardLocation(buildDashboardFallbackLocation('현재 위치 정확도가 낮아 서울시청 기준으로 표시합니다.', accuracy));
+        resolve(dashboardState.location);
+        return;
+      }
+      if(!isWithinSeoulBounds(lat, lng)){
+        updateDashboardLocation(buildDashboardFallbackLocation('현재 시범 서비스는 서울 지역 대피소만 제공합니다.', accuracy));
         resolve(dashboardState.location);
         return;
       }
@@ -1086,15 +1095,7 @@ function resolveDashboardLocation(){
       });
       resolve(dashboardState.location);
     }, () => {
-      updateDashboardLocation({
-        lat: DASHBOARD_CENTER.lat,
-        lng: DASHBOARD_CENTER.lng,
-        source: 'fallback',
-        heroLabel: '서울시청 기준',
-        statusLine: '서울시청 기준 · 반경 5km',
-        noteLine: '현재 위치를 불러올 수 없습니다. 서울시청 기준으로 대피소를 표시합니다.',
-        accuracy: null
-      });
+      updateDashboardLocation(buildDashboardFallbackLocation('현재 위치를 불러올 수 없습니다. 서울시청 기준으로 대피소를 표시합니다.', null));
       resolve(dashboardState.location);
     }, {
       enableHighAccuracy: true,
