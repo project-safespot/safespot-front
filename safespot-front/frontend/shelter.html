@@ -30,6 +30,10 @@
 .disaster-filter-row label{font-size:13px;font-weight:700;color:var(--navy);white-space:nowrap;flex-shrink:0;}
 .disaster-filter-row select{flex:1;border:1.5px solid #b0c0e0;padding:9px 10px;font-size:14px;font-family:inherit;outline:none;color:var(--text);background:#f0f6ff;}
 .disaster-filter-row select:focus{border-color:var(--red);}
+.disaster-tabs{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;}
+.disaster-tab{border:1px solid #b0c0e0;background:#f6f9ff;color:var(--navy);padding:8px 12px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;border-radius:999px;transition:background .12s ease,border-color .12s ease,color .12s ease,transform .12s ease;}
+.disaster-tab:hover{transform:translateY(-1px);border-color:#7d93c8;}
+.disaster-tab.active{background:var(--navy);border-color:var(--navy);color:#fff;}
 .disaster-badge{display:inline-block;font-size:11px;font-weight:700;padding:1px 7px;border-radius:2px;margin-left:6px;}
 .badge-earthquake{background:#fff0e6;color:#c84b00;}
 .badge-flood{background:#e6f0ff;color:#1a4a9c;}
@@ -300,14 +304,11 @@
         </select>
       </div>
       <!-- 재난유형 필터 -->
-      <div class="disaster-filter-row">
-        <label>재난유형</label>
-        <select id="disasterSel" onchange="filterShelters()">
-          <option value="">전체 재난유형</option>
-          <option value="EARTHQUAKE">🟠 지진</option>
-          <option value="FLOOD">🔵 홍수</option>
-          <option value="LANDSLIDE">🟢 산사태</option>
-        </select>
+      <div class="disaster-tabs" role="tablist" aria-label="재난유형 선택">
+        <button type="button" class="disaster-tab active" data-value="" onclick="setDisasterType('')">전체보기</button>
+        <button type="button" class="disaster-tab" data-value="EARTHQUAKE" onclick="setDisasterType('EARTHQUAKE')">지진</button>
+        <button type="button" class="disaster-tab" data-value="FLOOD" onclick="setDisasterType('FLOOD')">홍수</button>
+        <button type="button" class="disaster-tab" data-value="LANDSLIDE" onclick="setDisasterType('LANDSLIDE')">산사태</button>
       </div>
       <div class="filter-row">
         <input type="text" id="kwInput" placeholder="대피소명 또는 주소 검색">
@@ -517,7 +518,23 @@ function buildQuery(params) {
 }
 
 function getSelectedDisasterType() {
-  return document.getElementById('disasterSel').value || '';
+  return currentDisasterType || '';
+}
+
+function setDisasterTabActive(value) {
+  currentDisasterType = value || '';
+  var tabs = document.querySelectorAll('.disaster-tab');
+  tabs.forEach(function(tab) {
+    tab.classList.toggle('active', (tab.dataset.value || '') === currentDisasterType);
+  });
+}
+
+function setDisasterType(value) {
+  setDisasterTabActive(value);
+  selectedId = null;
+  document.getElementById('detailPanel').classList.remove('open');
+  document.getElementById('dpDetailWarn').style.display = 'none';
+  refreshShelterView();
 }
 
 function getSelectedShelterType() {
@@ -697,6 +714,7 @@ let nearbyShelters = (window.SafeSpotConfig && window.SafeSpotConfig.isMockMode(
 let mapTileShelters = (window.SafeSpotConfig && window.SafeSpotConfig.isMockMode()) ? MOCK_SHELTERS.map(normalizeShelterItem) : [];
 let listFilteredShelters = nearbyShelters.slice();
 let map, markers = [], selectedId = null;
+let currentDisasterType = '';
 let userLat = null, userLng = null, userAccuracy = null, userMarker = null, userCircle = null;
 let mapIdleTimer = null;
 let nearbyRequestSeq = 0;
@@ -715,14 +733,7 @@ function configureShelterFilters() {
       '<option value="WIDE">광역대피소</option>';
   }
 
-  var disasterSel = document.getElementById('disasterSel');
-  if (disasterSel) {
-    disasterSel.innerHTML = '' +
-      '<option value="">전체 재난유형</option>' +
-      '<option value="EARTHQUAKE">지진</option>' +
-      '<option value="FLOOD">홍수</option>' +
-      '<option value="LANDSLIDE">산사태</option>';
-  }
+  setDisasterTabActive(currentDisasterType);
 }
 
 function isRealMode() {
@@ -1307,6 +1318,7 @@ function hdrSearch(){
 }
 
 configureShelterFilters();
+setDisasterTabActive(currentDisasterType);
 initHeader();
 
 if(window.SafeSpotConfig && window.SafeSpotConfig.isRealMode()) {
@@ -1328,7 +1340,7 @@ kakao.maps.load(function(){
   var mapContainer = document.getElementById('map');
   var mapOption = {
     center: new kakao.maps.LatLng(37.5665, 126.9780),
-    level: 8
+    level: 6
   };
 
   map = new kakao.maps.Map(mapContainer, mapOption);
