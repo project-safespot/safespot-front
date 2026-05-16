@@ -59,7 +59,7 @@
 .map-legend{position:absolute;bottom:20px;right:12px;background:#fff;border:1px solid var(--border);padding:10px 14px;font-size:13px;z-index:999;box-shadow:0 2px 8px rgba(0,0,0,.12);}
 .map-legend h4{font-size:13px;font-weight:700;color:var(--navy);margin-bottom:7px;}
 .legend-row{display:flex;align-items:center;gap:7px;margin-bottom:4px;}
-.legend-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+.legend-dot{width:12px;height:12px;border-radius:50%;flex-shrink:0;}
 .dot-open{background:#1a7f3c;}
 .dot-full{background:#c8102e;}
 .dot-ready{background:#e8a000;}
@@ -73,9 +73,9 @@
 .sdp-actions button{flex:1;padding:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;border:none;}
 .btn-nav{background:var(--navy);color:#fff;}
 .btn-checkin{background:var(--red);color:#fff;}
-.mk{width:10px;height:10px;border-radius:50%;border:1.5px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.28);display:block;cursor:pointer;transition:transform .12s ease, box-shadow .12s ease;}
-.mk:hover{transform:scale(1.18);}
-.mk-selected{width:16px;height:16px;box-shadow:0 0 0 3px rgba(29,52,97,.18),0 2px 6px rgba(0,0,0,.3);}
+.mk{width:13px;height:13px;border-radius:50%;border:1.5px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.28);display:block;cursor:pointer;transition:transform .12s ease, box-shadow .12s ease;}
+.mk:hover{transform:scale(1.25);}
+.mk-selected{width:18px;height:18px;box-shadow:0 0 0 3px rgba(29,52,97,.18),0 2px 6px rgba(0,0,0,.3);}
 .mk-open{background:#1a7f3c;}
 .mk-full{background:#c8102e;}
 .mk-ready{background:#e8a000;}
@@ -273,9 +273,9 @@
       <p>내 주변 대피소 위치와 수용 현황을 실시간으로 확인하세요.</p>
     </div>
     <div class="page-hero-meta">
-      <span>🟢 여유 <strong>12</strong></span>
-      <span>🟡 보통 <strong>8</strong></span>
-      <span>🔴 혼잡 <strong>3</strong></span>
+      <span>🟢 여유 <strong id="heroCountLow">0</strong></span>
+      <span>🟡 보통 <strong id="heroCountMedium">0</strong></span>
+      <span>🔴 혼잡 <strong id="heroCountHigh">0</strong></span>
     </div>
   </div>
 </div>
@@ -660,6 +660,12 @@ function setMapNotice(message) {
   el.style.display = 'block';
 }
 
+function syncHeroStatusCounts(items) {
+  if (typeof updateHeroStatusCounts === 'function') {
+    updateHeroStatusCounts(items || []);
+  }
+}
+
 const MOCK_SHELTERS = [
   {id:1, name:'서울시청 광장 임시대피소',      addr:'서울 중구 태평로1가 31',           type:'임시대피소', disasterType:'FLOOD',      cap:2000, cur:1420, lat:37.5665, lng:126.9780, tel:'02-120',         facility:'화장실, 의무실, 급수, 식량', status:'open'},
   {id:2, name:'여의도 한강공원 대피소',         addr:'서울 영등포구 여의도동 2-14',       type:'광역대피소', disasterType:'FLOOD',      cap:5000, cur:5100, lat:37.5284, lng:126.9333, tel:'02-3780-0494',   facility:'화장실, 취식가능, 텐트존', status:'full'},
@@ -878,6 +884,7 @@ function openNavi() {
 function renderMarkers() {
   markers.forEach(function(marker) { marker.setMap(null); });
   markers = [];
+  syncHeroStatusCounts(mapTileShelters);
 
   if (!map) return;
 
@@ -1043,6 +1050,7 @@ async function loadMapTileShelters() {
   if (!tileInfo.tiles.length) {
     mapTileShelters = [];
     renderMarkers();
+    setMapNotice('지도를 확대해 대피소를 확인하세요.');
     return;
   }
 
