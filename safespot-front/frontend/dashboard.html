@@ -29,10 +29,11 @@
 .w-temp sup{font-size:18px;}
 .w-desc{font-size:15px;color:#555;margin-top:4px;}
 .w-loc{font-size:13px;color:#aaa;margin-top:2px;}
-.w-cells{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;}
+.w-cells{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;}
 .w-cell{background:#f0f4fa;padding:9px 6px;text-align:center;border:1px solid #dde6f0;}
 .w-cell .v{font-size:16px;font-weight:700;color:var(--navy);}
 .w-cell .k{font-size:12px;color:#888;margin-top:2px;}
+.w-meta{margin-top:10px;padding:10px 12px;background:#f8fbff;border:1px solid #dde6f0;font-size:12px;color:#5f6f85;line-height:1.6;}
 
 /* 미세먼지 */
 .dust-row{display:flex;align-items:center;gap:14px;margin-bottom:12px;}
@@ -59,6 +60,7 @@
 .bg-g{color:#27ae60;border-color:#27ae60;background:#f0faf0;}
 .bg-y{color:#e67e22;border-color:#e67e22;background:#fff8f0;}
 .bg-r{color:var(--red);border-color:var(--red);background:#fff0f0;}
+.bg-n{color:#64748b;border-color:#cbd5e1;background:#f8fafc;}
 
 /* 체크리스트 */
 .cat-row{display:flex;gap:7px;margin-bottom:12px;flex-wrap:wrap;}
@@ -76,6 +78,13 @@
 .cl-item.done label{text-decoration:line-through;color:#bbb;}
 .pri{font-size:12px;font-weight:700;color:#fff;padding:2px 7px;flex-shrink:0;}
 .pri-h{background:var(--red);} .pri-m{background:#e67e22;} .pri-l{background:#27ae60;}
+.guide-note{font-size:13px;color:#6b7280;line-height:1.6;margin-bottom:14px;}
+.guide-tip-list{margin:0;padding-left:18px;color:#374151;line-height:1.8;}
+.guide-tip-list li{margin-bottom:6px;}
+.guide-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px;}
+.guide-actions a{display:inline-flex;align-items:center;justify-content:center;min-width:150px;padding:10px 14px;border:1px solid var(--navy);font-size:14px;font-weight:700;text-decoration:none;}
+.guide-actions a:first-child{background:var(--navy);color:#fff;}
+.guide-actions a:last-child{background:#fff;color:var(--navy);}
 
 /* 재난문자 */
 .al-items{max-height:460px;overflow-y:auto;}
@@ -624,7 +633,6 @@ function renderCl(){
 }
 function tog(id){const i=items.find(x=>x.id===id);i.done=!i.done;renderCl();}
 renderCl();
-if(window.SafeSpotConfig && window.SafeSpotConfig.isRealMode()) initRealDashboard();
 
 const G={
   flood:{t:'🌊 홍수·침수 행동요령',b:'<ul><li>기상 예보에 귀 기울이고 침수 위험 지역은 미리 대피하세요.</li><li>하천·계곡 근처는 즉시 벗어나세요.</li><li>지하 공간 이용을 자제하세요.</li><li>침수 지역 전기 시설은 절대 만지지 마세요.</li><li>차량은 고지대로, 침수 도로는 진입 금지.</li><li>대피 시 가스 밸브 잠금, 전기 차단기를 내리세요.</li></ul>'},
@@ -639,6 +647,552 @@ const G={
   blackout:{t:'🔌 대규모 정전 행동요령',b:'<ul><li>손전등·양초 등 비상 조명 사용.</li><li>냉장식품 보존에 유의 (문을 최대한 열지 말 것).</li><li>의료기기 사용자는 즉시 119 연락.</li><li>엘리베이터 이용 자제.</li></ul>'},
 };
 function openGuide(k){const g=G[k];document.getElementById('gTitle').textContent=g.t;document.getElementById('gBody').innerHTML=g.b;document.getElementById('gModal').classList.add('open');}
+
+const DASHBOARD_RADIUS_METERS = 5000;
+const SEOUL_BOUNDS = { minLat: 37.41, maxLat: 37.71, minLng: 126.73, maxLng: 127.19 };
+const DISASTER_LABELS = { EARTHQUAKE: '지진', FLOOD: '홍수', LANDSLIDE: '산사태' };
+const ALERT_LEVEL_LABELS = { INTEREST: '관심', WARNING: '주의', SEVERE: '경계', CRITICAL: '심각', INFO: '안내', DISASTER: '재난' };
+const REAL_ACTION_GUIDES = {
+  all: {
+    label: '전체',
+    note: '가장 먼저 확인하면 좋은 핵심 행동만 모았습니다.',
+    items: [
+      '가까운 대피소 위치를 먼저 확인하세요.',
+      '가족 연락망과 집결 장소를 다시 확인하세요.',
+      '휴대전화 배터리와 보조배터리를 확보하세요.',
+      '재난문자와 기상 정보를 수시로 확인하세요.'
+    ]
+  },
+  earthquake: {
+    label: '지진',
+    note: '실내에서는 몸을 보호하고, 흔들림이 멈춘 뒤 안전한 곳으로 이동하세요.',
+    items: [
+      '흔들림이 멈출 때까지 머리를 보호하세요.',
+      '엘리베이터를 사용하지 마세요.',
+      '넓은 공간이나 지정 대피소로 이동하세요.'
+    ]
+  },
+  flood: {
+    label: '홍수',
+    note: '저지대와 지하공간 접근을 피하고, 대피 안내가 있으면 즉시 이동하세요.',
+    items: [
+      '하천·지하차도·저지대 접근을 피하세요.',
+      '침수 지역의 전기 시설을 만지지 마세요.',
+      '대피 안내가 있으면 즉시 이동하세요.'
+    ]
+  },
+  landslide: {
+    label: '산사태',
+    note: '위험 징후를 느끼면 지체하지 말고 급경사지에서 벗어나야 합니다.',
+    items: [
+      '산사태 위험지역과 급경사지 접근을 피하세요.',
+      '흙냄새·균열·낙석 징후가 있으면 즉시 대피하세요.',
+      '산사태 진행 방향과 직각 방향으로 이동하세요.'
+    ]
+  },
+  common: {
+    label: '공통',
+    note: '재난 유형과 관계없이 기본 준비를 갖추면 대응 속도가 크게 달라집니다.',
+    items: [
+      '가까운 대피소 위치를 확인하세요.',
+      '가족 연락망을 확인하세요.',
+      '휴대전화 배터리를 확보하세요.'
+    ]
+  }
+};
+const dashboardState = {
+  location: {
+    lat: DASHBOARD_CENTER.lat,
+    lng: DASHBOARD_CENTER.lng,
+    source: 'fallback',
+    heroLabel: '서울시청 기준',
+    statusLine: '서울시청 기준 · 반경 5km',
+    noteLine: '',
+    accuracy: null
+  },
+  realGuideTab: 'all'
+};
+
+function escapeHtml(value){
+  return String(value == null ? '' : value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function emptyState(message){
+  return '<div style="padding:24px 10px;text-align:center;color:#888;font-size:14px;line-height:1.7;">' + escapeHtml(message) + '</div>';
+}
+
+function apiErrorMsg(e){
+  if(!e) return '정보를 불러오지 못했습니다.';
+  if(e.status >= 500) return '서버에서 정보를 불러오지 못했습니다.';
+  if(e.status === 400) return '요청 파라미터를 다시 확인해 주세요.';
+  if(e.message === 'Failed to fetch') return '네트워크 연결을 확인해 주세요.';
+  return '정보를 불러오지 못했습니다.';
+}
+
+function toNumber(value){
+  const num = Number(value);
+  return Number.isFinite(num) ? num : null;
+}
+
+function formatNumber(value, digits){
+  const num = toNumber(value);
+  return num == null ? '-' : num.toFixed(digits || 0);
+}
+
+function formatMetric(value, unit, digits){
+  const num = toNumber(value);
+  return num == null ? '-' : num.toFixed(digits || 0) + unit;
+}
+
+function squeezeWhitespace(value){
+  return String(value == null ? '' : value).replace(/\s+/g, ' ').trim();
+}
+
+function safeText(value){
+  const text = squeezeWhitespace(value);
+  return text || '-';
+}
+
+function safeTimestampFallback(value){
+  const text = String(value == null ? '' : value).trim();
+  if(!text) return '-';
+  const cleaned = text
+    .replace('T', ' ')
+    .replace(/\.\d+/, '')
+    .replace(/(Z|[+-]\d{2}:?\d{0,2})$/, '')
+    .trim();
+  return cleaned.slice(0, 16) || text.slice(0, 16) || '-';
+}
+
+function formatKstDateTime(value){
+  if(value == null || value === '') return '-';
+  const raw = String(value).trim();
+  const normalized = raw.includes('T') ? raw : raw.replace(/^(\d{4}-\d{2}-\d{2}) /, '$1T');
+  const parsed = Date.parse(normalized);
+  if(Number.isNaN(parsed)) return safeTimestampFallback(raw);
+  const parts = new Intl.DateTimeFormat('sv-SE', {
+    timeZone: 'Asia/Seoul',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  }).formatToParts(new Date(parsed));
+  function pick(type){
+    const found = parts.find(part => part.type === type);
+    return found ? found.value : '00';
+  }
+  return `${pick('year')}-${pick('month')}-${pick('day')} ${pick('hour')}:${pick('minute')}`;
+}
+
+function isWithinSeoulBounds(lat, lng){
+  return lat >= SEOUL_BOUNDS.minLat && lat <= SEOUL_BOUNDS.maxLat && lng >= SEOUL_BOUNDS.minLng && lng <= SEOUL_BOUNDS.maxLng;
+}
+
+function updateHeroMeta(){
+  const meta = document.querySelector('.page-hero-meta');
+  if(meta){
+    const isRealMode = window.SafeSpotConfig && window.SafeSpotConfig.isRealMode();
+    meta.innerHTML = isRealMode
+      ? `<span>실시간 API 연동</span><span>${escapeHtml(dashboardState.location.heroLabel)}</span>`
+      : '<span>모의 데이터</span><span>서울시청 기준</span>';
+  }
+}
+
+function hydrateStaticLabels(){
+  document.title = '재난현황 - 국민재난안전포털';
+  const navItems = document.querySelectorAll('.main-nav .nav-item');
+  if(navItems[0]) navItems[0].textContent = '재난현황';
+  if(navItems[1]) navItems[1].textContent = '대피소 찾기';
+  if(navItems[2]) navItems[2].textContent = '재난문자';
+  if(navItems[3]) navItems[3].textContent = '가족 찾기';
+  if(navItems[4]) navItems[4].textContent = '재난 대비';
+  if(navItems[5]) navItems[5].textContent = '국민행동요령';
+  const heroTitle = document.querySelector('.page-hero h1');
+  if(heroTitle) heroTitle.textContent = '재난현황';
+  const heroDesc = document.querySelector('.page-hero p');
+  if(heroDesc) heroDesc.textContent = '날씨, 대기질, 내 주변 대피소, 재난문자를 한눈에 확인하고 오늘 필요한 대비 행동을 바로 살펴보세요.';
+  updateHeroMeta();
+  const breadcrumb = document.querySelector('.ptbar-inner');
+  if(breadcrumb){
+    breadcrumb.innerHTML = '<a href="index.html">홈</a> &gt; <span class="curr">재난현황</span>';
+  }
+  const weatherHead = document.getElementById('weatherBody');
+  if(weatherHead && weatherHead.previousElementSibling){
+    weatherHead.previousElementSibling.innerHTML = '현재 날씨 <span style="font-size:13px;font-weight:400;color:#888">기상청</span>';
+  }
+  const dustHead = document.getElementById('dustBody');
+  if(dustHead && dustHead.previousElementSibling){
+    dustHead.previousElementSibling.innerHTML = '대기질 <span style="font-size:13px;font-weight:400;color:#888">에어코리아</span>';
+  }
+  const shelterHead = document.getElementById('nearbyShelters');
+  if(shelterHead && shelterHead.previousElementSibling){
+    shelterHead.previousElementSibling.innerHTML = '내 주변 대피소 <a href="shelter.html?apiMode=real" style="font-size:13px;font-weight:400;color:var(--navy);">지도 보기 →</a>';
+  }
+  const alertsHead = document.querySelector('#alerts .card-head');
+  if(alertsHead){
+    alertsHead.innerHTML = '재난문자 히스토리 <span style="font-size:13px;font-weight:400;color:#888" id="alertRegionLabel">서울</span>';
+  }
+}
+
+function getWeatherIcon(data){
+  const precipitationType = safeText(data && data.precipitationType);
+  const weatherCondition = safeText(data && data.weatherCondition);
+  if(precipitationType !== '-' && precipitationType !== '없음') return '🌧️';
+  if(/눈/.test(precipitationType)) return '❄️';
+  if(/맑|관측값/.test(weatherCondition)) return '☀️';
+  if(/흐림|구름/.test(weatherCondition)) return '☁️';
+  return '🌤️';
+}
+
+async function fetchWeather(){
+  const body = document.getElementById('weatherBody');
+  body.innerHTML = emptyState('날씨 정보를 불러오는 중입니다.');
+  try{
+    const query = buildQuery({ region: '서울' });
+    const json = await SafeSpotApi.request({ service:'public', path:'/weather-alerts' + query });
+    if(!json.success || !json.data){
+      body.innerHTML = emptyState('날씨 정보가 아직 수집되지 않았습니다.');
+      return;
+    }
+    const d = json.data || {};
+    const temp = formatNumber(d.temperature, 1);
+    const condition = safeText(d.weatherCondition);
+    const region = safeText(d.region || '서울');
+    const precipitationType = safeText(d.precipitationType);
+    const precipitation = formatMetric(d.precipitation, 'mm', 0);
+    const humidity = formatMetric(d.humidity, '%', 0);
+    const windSpeed = formatMetric(d.windSpeed, 'm/s', 1);
+    const forecastedAt = formatKstDateTime(d.forecastedAt);
+    body.innerHTML =
+      `<div class="w-row"><div class="w-icon">${getWeatherIcon(d)}</div><div>` +
+      `<div class="w-temp">${escapeHtml(temp)}<sup>°C</sup></div>` +
+      `<div class="w-desc">${escapeHtml(condition)}</div>` +
+      `<div class="w-loc">📍 ${escapeHtml(region)}</div>` +
+      `</div></div>` +
+      `<div class="w-cells">` +
+      `<div class="w-cell"><div class="v">${escapeHtml(precipitationType)}</div><div class="k">강수형태</div></div>` +
+      `<div class="w-cell"><div class="v">${escapeHtml(precipitation)}</div><div class="k">강수량</div></div>` +
+      `<div class="w-cell"><div class="v">${escapeHtml(humidity)}</div><div class="k">습도</div></div>` +
+      `<div class="w-cell"><div class="v">${escapeHtml(windSpeed)}</div><div class="k">풍속</div></div>` +
+      `</div>` +
+      `<div class="w-meta">기준시각 ${escapeHtml(forecastedAt)}<br>한국시간 기준</div>`;
+  }catch(e){
+    console.warn('[weather-alerts]', e.status || '', e.message);
+    body.innerHTML = emptyState(apiErrorMsg(e));
+  }
+}
+
+function getPm10GradeLabel(pm10){
+  const value = toNumber(pm10);
+  if(value == null) return '-';
+  if(value <= 30) return '좋음';
+  if(value <= 80) return '보통';
+  if(value <= 150) return '나쁨';
+  return '매우나쁨';
+}
+
+function getGradeCodeLabel(code){
+  return ({ '1': '좋음', '2': '보통', '3': '나쁨', '4': '매우나쁨' })[String(code == null ? '' : code).trim()] || '-';
+}
+
+function getGradeClass(label){
+  if(label === '좋음') return 'd-g';
+  if(label === '나쁨' || label === '매우나쁨') return 'd-b';
+  return 'd-m';
+}
+
+async function fetchAirQuality(){
+  const body = document.getElementById('dustBody');
+  body.innerHTML = emptyState('대기질 정보를 불러오는 중입니다.');
+  try{
+    const query = buildQuery({ region: '서울' });
+    const json = await SafeSpotApi.request({ service:'public', path:'/air-quality' + query });
+    if(!json.success || !json.data){
+      body.innerHTML = emptyState('대기질 정보가 아직 수집되지 않았습니다.');
+      return;
+    }
+    const d = json.data || {};
+    const pm10 = formatNumber(d.pm10, 0);
+    const pm25 = formatNumber(d.pm25, 0);
+    const o3 = formatNumber(d.o3, 3);
+    const stationName = safeText(d.stationName);
+    const measuredAt = formatKstDateTime(d.measuredAt);
+    const pm10Grade = getPm10GradeLabel(d.pm10);
+    const pm25Grade = getGradeCodeLabel(d.pm25Grade);
+    const o3Grade = getGradeCodeLabel(d.o3Grade);
+    const gradeClass = getGradeClass(pm10Grade);
+    body.innerHTML =
+      `<div class="dust-row">` +
+      `<div class="dust-circle"><div class="dv">${escapeHtml(pm10)}</div><div class="du">PM10</div></div>` +
+      `<div><div class="dust-badge ${gradeClass}">${escapeHtml(pm10Grade)}</div>` +
+      `<div style="font-size:14px;color:#666;line-height:1.6">측정소 ${escapeHtml(stationName)}<br>측정시각 ${escapeHtml(measuredAt)}</div></div>` +
+      `</div>` +
+      `<div class="dust-grid">` +
+      `<div class="dust-cell"><span class="l">PM10</span><span class="v">${escapeHtml(pm10)}</span></div>` +
+      `<div class="dust-cell"><span class="l">PM2.5</span><span class="v">${escapeHtml(pm25)} · ${escapeHtml(pm25Grade)}</span></div>` +
+      `<div class="dust-cell"><span class="l">오존 O3</span><span class="v">${escapeHtml(o3)} · ${escapeHtml(o3Grade)}</span></div>` +
+      `<div class="dust-cell"><span class="l">측정소</span><span class="v">${escapeHtml(stationName)}</span></div>` +
+      `<div class="dust-cell"><span class="l">측정시각</span><span class="v" style="font-size:12px">${escapeHtml(measuredAt)}</span></div>` +
+      `</div>`;
+  }catch(e){
+    console.warn('[air-quality]', e.status || '', e.message);
+    body.innerHTML = emptyState(apiErrorMsg(e));
+  }
+}
+
+function formatAlertRegion(region){
+  const normalized = String(region == null ? '' : region).trim().toLowerCase();
+  if(normalized === 'seoul') return '서울';
+  return safeText(region);
+}
+
+function formatAlertLevel(level){
+  const key = String(level == null ? '' : level).trim().toUpperCase();
+  return ALERT_LEVEL_LABELS[key] || safeText(level);
+}
+
+function formatDisasterTypeLabel(type){
+  const key = String(type == null ? '' : type).trim().toUpperCase();
+  return DISASTER_LABELS[key] || safeText(type);
+}
+
+function mapDashboardAlert(a){
+  const levelKey = String(a && a.level || '').trim().toUpperCase();
+  return {
+    levelLabel: formatAlertLevel(a && a.level),
+    cls: (levelKey === 'CRITICAL' || levelKey === 'SEVERE' || levelKey === 'DISASTER') ? 't-dis' : (levelKey === 'WARNING' ? 't-wth' : 't-inf'),
+    time: formatKstDateTime(a && a.issuedAt),
+    text: safeText(a && a.message),
+    regionLabel: formatAlertRegion(a && a.region),
+    disasterLabel: formatDisasterTypeLabel(a && a.disasterType)
+  };
+}
+
+async function loadDashboardAlerts(){
+  const list = document.getElementById('dashboardAlerts');
+  list.innerHTML = emptyState('재난문자 정보를 불러오는 중입니다.');
+  try{
+    const json = await SafeSpotApi.request({ service:'public', path:'/disaster-alerts', method:'GET' });
+    if(!json.success) throw new Error((json.error && json.error.message) || 'SERVER_ERROR');
+    const alerts = ((json.data && json.data.items) || []).map(mapDashboardAlert).slice(0, 5);
+    if(!alerts.length){
+      list.innerHTML = emptyState('표시할 재난문자가 없습니다.');
+      document.getElementById('emgStrip').style.display = 'none';
+      return;
+    }
+    list.innerHTML = alerts.map(alert =>
+      `<div class="al-item">` +
+      `<div class="al-top"><span class="al-type ${alert.cls}">[${escapeHtml(alert.levelLabel)}]</span><span class="al-time">${escapeHtml(alert.time)}</span></div>` +
+      `<div class="al-text">${escapeHtml(alert.text)}</div>` +
+      `<div class="al-loc">📍 ${escapeHtml(alert.regionLabel)} · ${escapeHtml(alert.disasterLabel)}</div>` +
+      `</div>`
+    ).join('');
+    const alertRegionLabel = document.getElementById('alertRegionLabel');
+    if(alertRegionLabel) alertRegionLabel.textContent = alerts[0].regionLabel;
+    const first = alerts[0];
+    document.querySelector('#emgStrip .wrap span:nth-child(2)').innerHTML =
+      `<strong>[${escapeHtml(first.levelLabel)}]</strong> ${escapeHtml(first.time)} ${escapeHtml(first.text)} · ${escapeHtml(first.regionLabel)} · ${escapeHtml(first.disasterLabel)}`;
+  }catch(e){
+    list.innerHTML = emptyState('재난문자 정보를 불러오지 못했습니다.');
+    document.getElementById('emgStrip').style.display = 'none';
+  }
+}
+
+function mapDashboardShelter(s){
+  return {
+    id: s && s.shelterId,
+    name: safeText(s && s.shelterName),
+    cap: toNumber(s && s.capacityTotal),
+    cur: toNumber(s && s.currentOccupancy),
+    status: String(s && s.shelterStatus || '').trim().toUpperCase(),
+    congestionLevel: String(s && s.congestionLevel || '').trim().toUpperCase(),
+    lat: toNumber(s && s.latitude),
+    lng: toNumber(s && s.longitude)
+  };
+}
+
+function shelterBadge(s){
+  const occupancyRatio = (s.cap && s.cur != null) ? (s.cur / s.cap) : null;
+  if(s.congestionLevel === 'HIGH' || s.congestionLevel === 'FULL' || s.status === 'FULL' || s.status === 'STOPPED'){
+    return { cls:'bg-r', label:'혼잡', bar:'var(--red)' };
+  }
+  if(s.congestionLevel === 'MEDIUM' || s.status === 'PREPARING' || (occupancyRatio != null && occupancyRatio >= 0.5)){
+    return { cls:'bg-y', label:'보통', bar:'#e67e22' };
+  }
+  if(s.congestionLevel === 'LOW' || s.status === 'OPERATING' || s.status === 'AVAILABLE' || s.status === 'OPEN'){
+    return { cls:'bg-g', label:'여유', bar:'#27ae60' };
+  }
+  return { cls:'bg-n', label:'-', bar:'#94a3b8' };
+}
+
+function formatDistanceText(distance){
+  if(distance == null) return '-';
+  if(distance < 1) return Math.round(distance * 1000) + 'm';
+  return distance.toFixed(1) + 'km';
+}
+
+function updateDashboardLocation(next){
+  dashboardState.location = next;
+  updateHeroMeta();
+}
+
+function resolveDashboardLocation(){
+  return new Promise(resolve => {
+    if(!navigator.geolocation || typeof navigator.geolocation.getCurrentPosition !== 'function'){
+      updateDashboardLocation({
+        lat: DASHBOARD_CENTER.lat,
+        lng: DASHBOARD_CENTER.lng,
+        source: 'fallback',
+        heroLabel: '서울시청 기준',
+        statusLine: '서울시청 기준 · 반경 5km',
+        noteLine: '현재 위치를 불러올 수 없습니다. 서울시청 기준으로 대피소를 표시합니다.',
+        accuracy: null
+      });
+      resolve(dashboardState.location);
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(position => {
+      const lat = toNumber(position && position.coords && position.coords.latitude);
+      const lng = toNumber(position && position.coords && position.coords.longitude);
+      const accuracy = toNumber(position && position.coords && position.coords.accuracy);
+      if(lat == null || lng == null || !isWithinSeoulBounds(lat, lng)){
+        updateDashboardLocation({
+          lat: DASHBOARD_CENTER.lat,
+          lng: DASHBOARD_CENTER.lng,
+          source: 'fallback',
+          heroLabel: '서울시청 기준',
+          statusLine: '서울시청 기준 · 반경 5km',
+          noteLine: '현재 시범 서비스는 서울 지역 대피소만 제공합니다.',
+          accuracy
+        });
+        resolve(dashboardState.location);
+        return;
+      }
+      updateDashboardLocation({
+        lat,
+        lng,
+        source: 'user',
+        heroLabel: '내 위치 기준',
+        statusLine: '내 위치 기준 · 반경 5km',
+        noteLine: accuracy != null ? `위치 정확도 약 ${Math.round(accuracy)}m` : '',
+        accuracy
+      });
+      resolve(dashboardState.location);
+    }, () => {
+      updateDashboardLocation({
+        lat: DASHBOARD_CENTER.lat,
+        lng: DASHBOARD_CENTER.lng,
+        source: 'fallback',
+        heroLabel: '서울시청 기준',
+        statusLine: '서울시청 기준 · 반경 5km',
+        noteLine: '현재 위치를 불러올 수 없습니다. 서울시청 기준으로 대피소를 표시합니다.',
+        accuracy: null
+      });
+      resolve(dashboardState.location);
+    }, {
+      enableHighAccuracy: true,
+      timeout: 10000,
+      maximumAge: 0
+    });
+  });
+}
+
+async function loadDashboardShelters(){
+  const el = document.getElementById('nearbyShelters');
+  el.innerHTML = emptyState('대피소 정보를 불러오는 중입니다.');
+  try{
+    const location = dashboardState.location;
+    const qs = buildQuery({
+      lat: location.lat,
+      lng: location.lng,
+      radius: DASHBOARD_RADIUS_METERS,
+      limit: 4
+    });
+    const json = await SafeSpotApi.request({ service:'public', path:'/shelters/nearby' + qs, method:'GET' });
+    if(!json.success) throw new Error((json.error && json.error.message) || 'SERVER_ERROR');
+    const shelters = ((json.data && json.data.items) || []).map(mapDashboardShelter).slice(0, 4);
+    const headerLines = [
+      `<div style="font-size:13px;color:#999;margin-bottom:6px">${escapeHtml(location.statusLine)}</div>`
+    ];
+    if(location.noteLine){
+      headerLines.push(`<div style="font-size:12px;color:${location.noteLine.includes('시범 서비스') ? '#c2410c' : '#64748b'};margin-bottom:8px">${escapeHtml(location.noteLine)}</div>`);
+    }
+    if(!shelters.length){
+      el.innerHTML = headerLines.join('') + emptyState('가까운 대피소 정보가 없습니다.');
+      return;
+    }
+    el.innerHTML = headerLines.join('') + shelters.map(s => {
+      const badge = shelterBadge(s);
+      const dist = distanceKm(location.lat, location.lng, s.lat, s.lng);
+      return `<div class="sh-row" onclick="location.href='shelter.html?apiMode=real'">` +
+        `<div class="sh-bar" style="background:${badge.bar}"></div>` +
+        `<div class="sh-name">${escapeHtml(s.name)}</div>` +
+        `<div class="sh-dist">${escapeHtml(formatDistanceText(dist))}</div>` +
+        `<div class="s-badge ${badge.cls}">${escapeHtml(badge.label)}</div>` +
+      `</div>`;
+    }).join('');
+  }catch(e){
+    el.innerHTML = emptyState('대피소 정보를 불러오지 못했습니다.');
+  }
+}
+
+function renderRealActionGuide(){
+  const card = document.getElementById('checklist');
+  if(!card) return;
+  const cardHead = card.querySelector('.card-head');
+  const cardBody = card.querySelector('.card-body');
+  if(cardHead){
+    cardHead.innerHTML = '오늘의 재난 대비 행동 <a href="guide.html" style="font-size:13px;font-weight:400;color:var(--navy);">행동요령 전체 보기 →</a>';
+  }
+  if(cardBody){
+    cardBody.innerHTML =
+      '<div class="cat-row" id="realGuideTabs"></div>' +
+      '<div class="guide-note" id="realGuideNote"></div>' +
+      '<ul class="guide-tip-list" id="realGuideList"></ul>' +
+      '<div class="guide-actions">' +
+      '<a href="shelter.html?apiMode=real">가까운 대피소 보기</a>' +
+      '<a href="guide.html">행동요령 전체 보기</a>' +
+      '</div>';
+  }
+  renderRealActionGuideTabs();
+}
+
+function renderRealActionGuideTabs(){
+  const tabs = document.getElementById('realGuideTabs');
+  if(!tabs) return;
+  const order = ['all', 'earthquake', 'flood', 'landslide', 'common'];
+  tabs.innerHTML = order.map(key => {
+    const guide = REAL_ACTION_GUIDES[key];
+    return `<button type="button" class="cat-btn${dashboardState.realGuideTab === key ? ' on' : ''}" onclick="setRealGuideTab('${key}')">${escapeHtml(guide.label)}</button>`;
+  }).join('');
+  const current = REAL_ACTION_GUIDES[dashboardState.realGuideTab] || REAL_ACTION_GUIDES.all;
+  document.getElementById('realGuideNote').textContent = current.note;
+  document.getElementById('realGuideList').innerHTML = current.items.map(item => `<li>${escapeHtml(item)}</li>`).join('');
+}
+
+function setRealGuideTab(key){
+  dashboardState.realGuideTab = REAL_ACTION_GUIDES[key] ? key : 'all';
+  renderRealActionGuideTabs();
+}
+
+function initRealDashboard(){
+  hydrateStaticLabels();
+  renderRealActionGuide();
+  fetchWeather();
+  fetchAirQuality();
+  loadDashboardAlerts();
+  resolveDashboardLocation().then(loadDashboardShelters);
+}
+
+hydrateStaticLabels();
+if(window.SafeSpotConfig && window.SafeSpotConfig.isRealMode()) initRealDashboard();
 
 // [더미] 백엔드 연결 시 제거
 const ADMINS={manager:'manager1234',admin2:'admin2024'};
